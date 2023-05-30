@@ -1,13 +1,100 @@
 
 \documentclass[11pt]{article}
 
+\usepackage{amstext}
+\usepackage{indentfirst}
+
 \begin{document}
 
 \title{Estimating Population Mean Fitness and Change Thereof When
     the Population Distribution is Unknown}
 
-\author{Charles J. Geyer}
+\author{Charles J. Geyer \and Ruth G. Shaw}
 
 \maketitle
+
+\section{Introduction}
+
+We have an experiment in which (Darwinian) fitness (measured as lifetime
+number of offspring per individual) was measured under wild conditions.
+But the individuals in the experiment were not a random sample from
+a population but rather pedigreed experimental crosses.  There are no data on
+population allele frequencies, and even if there were, there would be
+no good way to treat these experimental crosses as members of some
+population.  Thus we simply assume some population distribution (of
+pedigreed crosses).  All of our inferences will be sensitive to this
+assumption, but we can check how sensitive (by trying different assumptions
+or doing other mathematical sensitivity analysis).
+
+The particular experiment at hand has five subexperiments laid out as follows.
+\begin{center}
+\begin{tabular}{ccc}
+year one & year two & year three \\
+\hline
+parents & parents & parents \\
+        & offspring & offspring
+\end{tabular}
+\end{center}
+Here ``parents'' means individuals from the pedigreed crosses (seeds from
+the same crosses were planted in each year).  For short, we will say these
+individuals are from the same ``family'' if they are known full sibs
+(have the same parents).
+Here ``offspring'' means individuals whose dam was a ``parent'' from the
+previous year (sire unknown because of open pollination).
+For short, we will say these
+individuals are from the same ``family'' as their dam in the previous year.
+
+If
+\begin{itemize}
+\item $p_i$ is the (assumed) population frequency of family $i$, and
+\item $\hat{\mu}_i$ is (estimated) mean fitness for family $i$,
+\end{itemize}
+then
+\begin{itemize}
+\item $p_i \hat{\mu}_i$ is (estimated) mean fitness for that subexperiment.
+\end{itemize}
+
+We also need to know the (estimated) population frequency
+\emph{after selection}, which is
+$$
+   \hat{q}_i = \frac{p_i \hat{\mu}_i}{\sum_j p_j \hat{\mu}_j}
+$$
+where the sum in the denominator runs over all families.
+
+Now we need to consider three subexperiments
+\begin{itemize}
+\item a ``parent'' subexperiment in one year (denoted by superscript prev),
+\item an ``offspring'' subexperiment in the next year (denoted
+    by superscript off), and
+\item the ``parent'' subexperiment in the same year as the ``offspring
+    experiment (denoted by superscript par).
+\end{itemize}
+
+The total change in mean fitness in one generation is
+$$
+   \textstyle \sum_i \bigl[
+   \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off}
+   -
+   p_i^\text{prev} \hat{\mu}_i^\text{prev}
+   \bigr]
+$$
+we break this up as the sum of three differences in mean fitness
+\begin{itemize}
+\item $\sum_i (\hat{q}_i^\text{prev} - p_i^\text{prev}) \hat{\mu}_i^\text{prev}$
+    is the change in mean fitness that Fisher's fundamental theorem of
+    natural selection tries to address (change in fitness due to natural
+    (viability) selection),
+\item $\sum_i \hat{q}_i^\text{prev} (\hat{\mu}_i^\text{par} -
+    \hat{\mu}_i^\text{prev})$
+    is the change in mean fitness due to different environments in the
+    two years, and
+\item $\sum_i \hat{q}_i^\text{prev} (\hat{\mu}_i^\text{off} -
+    \hat{\mu}_i^\text{par})$
+    is the change in mean fitness due to differences in genetics of the
+    parent and offspring subjects not due to viability selection
+    (something not addressed by Fisher's fundamental theorem).
+\end{itemize}
+We intend to estimate, discuss, and interpret each of these three differences
+separately.  We also need to derive standard errors for each.
 
 \end{document}
