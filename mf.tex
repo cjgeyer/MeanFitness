@@ -84,7 +84,8 @@ we break this up as the sum of three differences in mean fitness
 \item $\sum_i (\hat{q}_i^\text{prev} - p_i^\text{prev}) \hat{\mu}_i^\text{prev}$
     is the change in mean fitness that Fisher's fundamental theorem of
     natural selection tries to address (change in fitness due to natural
-    selection),
+    selection), i.e. this is the genetically based change in mean fitness within
+    the generation/yr in which selection takes place.
 \item $\sum_i \hat{q}_i^\text{prev} (\hat{\mu}_i^\text{par} -
     \hat{\mu}_i^\text{prev})$
     is the change in mean fitness due to different environments in the
@@ -97,5 +98,22 @@ we break this up as the sum of three differences in mean fitness
 \end{itemize}
 We intend to estimate, discuss, and interpret each of these three differences
 separately.  We also need to derive standard errors for each.
+
+
+Here is another partitioning of the total change in mean fitness from one generation to the next.
+
+\begin{itemize}
+        \item $\sum_i (\hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
+        p_i^\text{prev} \hat{\mu}_i^\text{par})$
+    is the genetically based change in mean fitness due to natural selection), as
+    expressed in the environment in which the offspring grow.
+\item $\sum_i {p}_i^\text{prev} (\hat{\mu}_i^\text{par} -
+    \hat{\mu}_i^\text{prev})$
+    is the change in mean fitness due solely to different environments in the
+    two years.
+\end{itemize}
+
+
+This one is also of interest.
 
 \end{document}
