@@ -8,6 +8,9 @@
     {hyperref}
 \usepackage{doi}
 
+\newcommand{\REVISED}{\begin{center} \LARGE REVISED DOWN TO HERE \end{center}}
+\newcommand{\MOVED}[1][equation]{\begin{center} [#1 moved] \end{center}}
+
 \begin{document}
 
 \title{Estimating Population Mean Fitness and Change Thereof When
@@ -54,8 +57,8 @@ individuals are from the same ``family'' as their dam in the previous year.
 
 If
 \begin{itemize}
-\item $p_i$ is the (assumed) population frequency of family $i$ (perhaps
-    assumed to be equal for all $i$, perhaps not), and
+\item $p_i$ is the (assumed) population frequency of family $i$
+    (perhaps assumed to be equal for all $i$, perhaps not), and
 \item $\hat{\mu}_i$ is (estimated) mean fitness for family $i$,
 \end{itemize}
 then
@@ -70,7 +73,8 @@ $$
    \hat{q}_i = \frac{p_i \hat{\mu}_i}{\sum_j p_j \hat{\mu}_j}
 $$
 where the sum in the denominator runs over all families.
-(This is standard in quantitative genetics, Lande-Arnold, breeder's equation,
+(This is standard in quantitative genetics, \citet{lande-arnold},
+breeder's equation,
 and so forth, but does not account for recombination and other effects.)
 
 Now we need to consider three subexperiments
@@ -81,6 +85,8 @@ Now we need to consider three subexperiments
 \item the ``parent'' subexperiment in the same year as the ``offspring
     experiment (denoted by superscript par).
 \end{itemize}
+(There are two such triangles of subexperiments in these data, one
+for each offspring year.)
 
 The total change in mean fitness in one generation is
 \begin{equation} \label{eq:total-change}
@@ -130,18 +136,21 @@ others have biological interpretations.
 We intend to estimate, discuss, and interpret each of these three differences
 separately.  We also need to derive standard errors for each.
 
-\subsection{Other Parts of Change in Mean Fitness}
+\subsection{Another Decomposition of Change in Mean Fitness}
 
-Other parts of the total change in mean fitness from one generation to the next
-are of interest.
+If in \eqref{eq:total-change} we replace
 \begin{subequations}
+$\hat{\mu}_i^\text{prev}$ by $\hat{\mu}_i^\text{par}$ we obtain
 \begin{equation} \label{eq:partial-change-foo}
-   \sum\nolimits_i \bigl(\hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
-   p_i^\text{prev} \hat{\mu}_i^\text{par}\bigr)
+   \sum\nolimits_i \bigl( \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
+   p_i^\text{prev} \hat{\mu}_i^\text{par} \bigr)
 \end{equation}
-is the genetically based change in mean fitness due to natural selection), as
-expressed in the environment in which the offspring grow.
+which compares offspring to parents in the same environment (year).
+So this estimates the combined genetically based change in mean fitness
+(both the part estimated by Fisher's fundamental theorem and the other
+part).
 
+Then
 \begin{equation} \label{eq:partial-change-bar}
    \sum\nolimits_i {p}_i^\text{prev} \bigl(\hat{\mu}_i^\text{par} -
     \hat{\mu}_i^\text{prev}\bigr)
@@ -154,7 +163,22 @@ any of the experiments) and \eqref{eq:partial-change-genetic-non-fftns}
 uses the weights after selection in the first subexperiment, which are the
 weights (according to theory) that apply to the offspring in both equations.
 
+It is easily checked that
+\eqref{eq:partial-change-fftns} plus
+\eqref{eq:partial-change-environmental} plus
+\eqref{eq:partial-change-genetic-non-fftns} gives
+\eqref{eq:total-change}.  Thus we have decomposed the total change
+in mean fitness in one generation into three parts, one of which is
+the part of the change addressed by Fisher's fundamental theorem and the
+others have biological interpretations.
 \end{subequations}
+
+It is easily checked that
+\eqref{eq:partial-change-foo} plus
+\eqref{eq:partial-change-bar} gives
+\eqref{eq:total-change}.  Thus we have decomposed the total change
+in mean fitness in one generation into two parts, which
+have biological interpretations.
 
 \section{Standard Errors}
 
@@ -169,6 +193,11 @@ Geyer, C.~J., Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M.,
 \newblock \doi{10.1111/evo.14607}.
 \newblock Supplementary material, version 2.0.1.
 \newblock \doi{10.5281/zenodo.7013098}.
+
+\bibitem[Lande and Arnold(1983)]{lande-arnold}
+Lande, R. and Arnold, S.~J. (1983).
+\newblock The measurement of selection on correlated characters.
+\newblock \emph{Evolution}, \textbf{37}, 1210--1226.
 
 \end{thebibliography}
 
