@@ -1,8 +1,12 @@
 
 \documentclass[11pt]{article}
 
-\usepackage{amstext}
+\usepackage{amsmath}
 \usepackage{indentfirst}
+\usepackage{natbib}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]
+    {hyperref}
+\usepackage{doi}
 
 \begin{document}
 
@@ -12,6 +16,10 @@
 \author{Charles J. Geyer \and Ruth G. Shaw}
 
 \maketitle
+
+\section{Estimates}
+
+\subsection{Experiment}
 
 We have an experiment in which (Darwinian) fitness (measured as lifetime
 number of offspring per individual) was measured under wild conditions.
@@ -42,11 +50,12 @@ previous year (sire unknown because of open pollination).
 For short, we will say these
 individuals are from the same ``family'' as their dam in the previous year.
 
-\pagebreak[3]
+\subsection{Change in Mean Fitness}
 
 If
 \begin{itemize}
-\item $p_i$ is the (assumed) population frequency of family $i$, and
+\item $p_i$ is the (assumed) population frequency of family $i$ (perhaps
+    assumed to be equal for all $i$, perhaps not), and
 \item $\hat{\mu}_i$ is (estimated) mean fitness for family $i$,
 \end{itemize}
 then
@@ -61,6 +70,8 @@ $$
    \hat{q}_i = \frac{p_i \hat{\mu}_i}{\sum_j p_j \hat{\mu}_j}
 $$
 where the sum in the denominator runs over all families.
+(This is standard in quantitative genetics, Lande-Arnold, breeder's equation,
+and so forth, but does not account for recombination and other effects.)
 
 Now we need to consider three subexperiments
 \begin{itemize}
@@ -72,48 +83,93 @@ Now we need to consider three subexperiments
 \end{itemize}
 
 The total change in mean fitness in one generation is
-$$
-   \textstyle \sum_i \bigl[
+\begin{equation} \label{eq:total-change}
+   \sum\nolimits_i \bigl(
    \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off}
    -
    p_i^\text{prev} \hat{\mu}_i^\text{prev}
-   \bigr]
-$$
-we break this up as the sum of three differences in mean fitness
-\begin{itemize}
-\item $\sum_i (\hat{q}_i^\text{prev} - p_i^\text{prev}) \hat{\mu}_i^\text{prev}$
-    is the change in mean fitness that Fisher's fundamental theorem of
-    natural selection tries to address (change in fitness due to natural
-    selection), i.e. this is the genetically based change in mean fitness within
-    the generation/yr in which selection takes place.
-\item $\sum_i \hat{q}_i^\text{prev} (\hat{\mu}_i^\text{par} -
-    \hat{\mu}_i^\text{prev})$
-    is the change in mean fitness due to different environments in the
-    two years, and
-\item $\sum_i \hat{q}_i^\text{prev} (\hat{\mu}_i^\text{off} -
-    \hat{\mu}_i^\text{par})$
-    is the change in mean fitness due to differences in genetics of the
-    parent and offspring subjects not due to natural selection
-    (something not addressed by Fisher's fundamental theorem).
-\end{itemize}
+   \bigr)
+\end{equation}
+
+\subsection{Decomposition of Change in Mean Fitness}
+
+We break this up as the sum of three differences in mean fitness.
+\begin{subequations}
+\begin{equation} \label{eq:partial-change-fftns}
+   \sum\nolimits_i
+   \bigl(\hat{q}_i^\text{prev} - p_i^\text{prev}\bigr) \hat{\mu}_i^\text{prev}
+\end{equation}
+is the change in mean fitness that Fisher's fundamental theorem of
+natural selection tries to address (change in fitness due to natural
+selection), i.e. this is the genetically based change in mean fitness within
+the generation/yr in which selection takes place.
+\begin{equation} \label{eq:partial-change-environmental}
+    \sum\nolimits_i \hat{q}_i^\text{prev} \big(\hat{\mu}_i^\text{par} -
+    \hat{\mu}_i^\text{prev}\bigr)
+\end{equation}
+is the change in mean fitness due to different environments in the
+two years.
+\begin{equation} \label{eq:partial-change-genetic-non-fftns}
+    \sum\nolimits_i \hat{q}_i^\text{prev} \bigl(\hat{\mu}_i^\text{off} -
+    \hat{\mu}_i^\text{par}\bigr)
+\end{equation}
+is the change in mean fitness due to differences in genetics of the
+parent and offspring subjects not due to natural selection
+(something not addressed by Fisher's fundamental theorem).
+\end{subequations}
+
+It is easily checked that
+\eqref{eq:partial-change-fftns} plus
+\eqref{eq:partial-change-environmental} plus
+\eqref{eq:partial-change-genetic-non-fftns} gives
+\eqref{eq:total-change}.  Thus we have decomposed the total change
+in mean fitness in one generation into three parts, one of which is
+the part of the change addressed by Fisher's fundamental theorem and the
+others have biological interpretations.
+
 We intend to estimate, discuss, and interpret each of these three differences
 separately.  We also need to derive standard errors for each.
 
+\subsection{Other Parts of Change in Mean Fitness}
 
-Here is another partitioning of the total change in mean fitness from one generation to the next.
+Other parts of the total change in mean fitness from one generation to the next
+are of interest.
+\begin{subequations}
+\begin{equation} \label{eq:partial-change-foo}
+   \sum\nolimits_i \bigl(\hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
+   p_i^\text{prev} \hat{\mu}_i^\text{par}\bigr)
+\end{equation}
+is the genetically based change in mean fitness due to natural selection), as
+expressed in the environment in which the offspring grow.
 
-\begin{itemize}
-        \item $\sum_i (\hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
-        p_i^\text{prev} \hat{\mu}_i^\text{par})$
-    is the genetically based change in mean fitness due to natural selection), as
-    expressed in the environment in which the offspring grow.
-\item $\sum_i {p}_i^\text{prev} (\hat{\mu}_i^\text{par} -
-    \hat{\mu}_i^\text{prev})$
-    is the change in mean fitness due solely to different environments in the
-    two years.
-\end{itemize}
+\begin{equation} \label{eq:partial-change-bar}
+   \sum\nolimits_i {p}_i^\text{prev} \bigl(\hat{\mu}_i^\text{par} -
+    \hat{\mu}_i^\text{prev}\bigr)
+\end{equation}
+is the change in mean fitness due solely to different environments in the
+two years.  (This equation is just like
+\eqref{eq:partial-change-genetic-non-fftns} except the weights are different:
+\eqref{eq:partial-change-bar} uses the (assumed) population weights (before
+any of the experiments) and \eqref{eq:partial-change-genetic-non-fftns} 
+uses the weights after selection in the first subexperiment, which are the
+weights (according to theory) that apply to the offspring in both equations.
 
+\end{subequations}
 
-This one is also of interest.
+\section{Standard Errors}
+
+\begin{thebibliography}{}
+
+\bibitem[Geyer, et al.(2022)Geyer, Kulbaba, Sheth, Pain, Eckhart,
+    and Shaw]{zenodo}
+Geyer, C.~J., Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M.,
+    and Shaw, R.~G. (2022).
+\newblock Correction for Kulbaba et al. (2019).
+\newblock \emph{Evolution}, \textbf{76}, 3074.
+\newblock \doi{10.1111/evo.14607}.
+\newblock Supplementary material, version 2.0.1.
+\newblock \doi{10.5281/zenodo.7013098}.
+
+\end{thebibliography}
 
 \end{document}
