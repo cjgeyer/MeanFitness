@@ -8,6 +8,8 @@
     {hyperref}
 \usepackage{doi}
 
+\let\code=\texttt
+
 \newcommand{\REVISED}{\begin{center} \LARGE REVISED DOWN TO HERE \end{center}}
 \newcommand{\MOVED}[1][equation]{\begin{center} [#1 moved] \end{center}}
 
@@ -181,6 +183,13 @@ in mean fitness in one generation into two parts, which
 have biological interpretations.
 
 \section{Standard Errors}
+
+We start our analysis of standard errors by assuming the reader knows
+how to map (estimated) breeding values from the canonical parameter scale
+to the mean value parameter scale, the function that produced the $\hat{mu}_i$
+for a subexperiment.  And example is R function \code{map} constructed
+in Section~9 of \citet{zenodo}.  There is also its vectorized version
+\code{mapv} constructed in the same section.
 
 \begin{thebibliography}{}
 
