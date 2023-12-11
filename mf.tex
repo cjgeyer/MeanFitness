@@ -4,8 +4,7 @@
 \usepackage{amsmath}
 \usepackage{indentfirst}
 \usepackage{natbib}
-\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]
-    {hyperref}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
 \usepackage{doi}
 
 \let\code=\texttt
@@ -28,11 +27,14 @@
 
 We have an experiment in which (Darwinian) fitness (measured as lifetime
 number of offspring per individual) was measured under wild conditions.
-But the individuals in the experiment were not a random sample from
-a population but rather pedigreed experimental crosses.  There are no data on
+The individuals in the experiment were not a random sample from
+a population but rather offspring from crosses in the experimental design having distinct sets of maternal
+individuals mated to individual paternal ones, that is,
+generating full-sib groups nested within paternal half-sib
+groups.  There are no data on
 population allele frequencies, and even if there were, there would be
-no good way to treat these experimental crosses as members of some
-population.  Thus we simply assume some population distribution (of
+no information of the bearing of the alleles on fitness of individuals in the population. 
+Thus we simply assume some population distribution (of
 pedigreed crosses).  All of our inferences will be sensitive to this
 assumption, but we can check how sensitive (by trying different assumptions
 or doing other mathematical sensitivity analysis).
@@ -46,12 +48,12 @@ parents & parents & parents \\
         & offspring & offspring
 \end{tabular}
 \end{center}
-Here ``parents'' means individuals from the pedigreed crosses (seeds from
+Here ``parents'' means individuals produced by the experimental crosses (seeds from
 the same crosses were planted in each year).  For short, we will say these
-individuals are from the same ``family'' if they are known full sibs
-(have the same parents).
+individuals are from the same ``family'' if they are known sibs
+(that is, have the same sire in the experimental crosses).
 Here ``offspring'' means individuals whose dam was a ``parent'' from the
-previous year (sire unknown because of open pollination).
+previous year (their own sire unknown because of open pollination).
 For short, we will say these
 individuals are from the same ``family'' as their dam in the previous year.
 
@@ -90,7 +92,7 @@ Now we need to consider three subexperiments
 (There are two such triangles of subexperiments in these data, one
 for each offspring year.)
 
-The total change in mean fitness in one generation is
+The total change in mean fitness in from one generation to (the same point in) the next is
 \begin{equation} \label{eq:total-change}
    \sum\nolimits_i \bigl(
    \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off}
@@ -98,6 +100,13 @@ The total change in mean fitness in one generation is
    p_i^\text{prev} \hat{\mu}_i^\text{prev}
    \bigr)
 \end{equation}
+
+\subsection{Decomposition of Change in Mean Fitness}
+
+We now decompose \eqref{eq:total-change} into a sum of three terms,
+each of which has a biological interpretation.
+
+\REVISED
 
 \subsection{Decomposition of Change in Mean Fitness}
 
@@ -109,34 +118,22 @@ We break this up as the sum of three differences in mean fitness.
 \end{equation}
 is the change in mean fitness that Fisher's fundamental theorem of
 natural selection tries to address (change in fitness due to natural
-selection), i.e. this is the genetically based change in mean fitness within
-the generation/yr in which selection takes place.
+selection), that is, this is the genetically based change in mean fitness within
+the generation/year in which selection takes place.
 \begin{equation} \label{eq:partial-change-environmental}
     \sum\nolimits_i \hat{q}_i^\text{prev} \big(\hat{\mu}_i^\text{par} -
     \hat{\mu}_i^\text{prev}\bigr)
 \end{equation}
-is the change in mean fitness due to different environments in the
+is the change in mean fitness due to any difference between the environmnets in the
 two years.
 \begin{equation} \label{eq:partial-change-genetic-non-fftns}
     \sum\nolimits_i \hat{q}_i^\text{prev} \bigl(\hat{\mu}_i^\text{off} -
     \hat{\mu}_i^\text{par}\bigr)
 \end{equation}
-is the change in mean fitness due to differences in genetics of the
-parent and offspring subjects not due to natural selection
+is the change in mean fitness due to differences in genetic composition of the
+parent and offspring groups not due to natural selection
 (something not addressed by Fisher's fundamental theorem).
 \end{subequations}
-
-It is easily checked that
-\eqref{eq:partial-change-fftns} plus
-\eqref{eq:partial-change-environmental} plus
-\eqref{eq:partial-change-genetic-non-fftns} gives
-\eqref{eq:total-change}.  Thus we have decomposed the total change
-in mean fitness in one generation into three parts, one of which is
-the part of the change addressed by Fisher's fundamental theorem and the
-others have biological interpretations.
-
-We intend to estimate, discuss, and interpret each of these three differences
-separately.  We also need to derive standard errors for each.
 
 \subsection{Another Decomposition of Change in Mean Fitness}
 
@@ -182,16 +179,70 @@ It is easily checked that
 in mean fitness in one generation into two parts, which
 have biological interpretations.
 
+We intend to estimate, discuss, and interpret each of these three differences
+separately.  We also need to derive standard errors for each.
+
 \section{Standard Errors}
 
-We start our analysis of standard errors by assuming the reader knows
-how to map (estimated) breeding values from the canonical parameter scale
-to the mean value parameter scale, the function that produced the $\hat{mu}_i$
-for a subexperiment.  And example is R function \code{map} constructed
-in Section~9 of \citet{zenodo}.  There is also its vectorized version
-\code{mapv} constructed in the same section.
+\subsection{Introduction}
+
+In aster models with random effects \citep*{reaster} we have fixed effects
+and random effects.  Fixed effects are unknown parameters to estimate.
+Random effects are not.  They are random variables whose variances are
+unknown parameters to estimate (so-called \emph{variance components}).
+
+R function \code{reaster} in R package \code{aster} \citep{aster-package}
+provides standard errors for the estimated parameters (fixed effects and
+variance components) and, more generally, provides (an approximation to)
+the Fisher information matrix for these parameters.  The latter is
+undocumented although is used in published examples
+\citep[Supplementary material Section~12.3.1]{zenodo}.  And the inverse
+of this matrix is (by the ``usual'' asymptotics of maximum likelihood)
+the variance-covariance matrix of the parameter estimates.
+
+R function \code{reaster} also provides ``estimates'' (in scare quotes)
+of random effects.  Of course, random effects are not constants to estimate,
+so these are like parameter estimates.  They estimate \emph{something}, but
+what?
+
+In classical quantitative genetics where all random variables in the model
+(response and random effects) are jointly multivariate normal, one has
+BLUP (best linear unbiased predictors) of the random effects.  These
+are conditional expectations of random effects given the observed value
+of the response (quantitative trait), and these are linear functions
+of the response vector (because conditional expectations of multivariate
+normal are linear) and unbiased (also a property of multivariate normal)
+and best in the sense of having smaller variance than any other linear
+unbiased predictions.
+
+One can think of R function \code{reaster}'s ``estimates'' (in scare quotes)
+of random effects as being analogs of BLUP's except without the B, L, and U.
+Because the response in an aster model is not taken to be normally distributed,
+the conditional distribution of random effects given observed response is
+not normally distributed (and is unknown so could only be investigated
+using Markov chain Monte Carlo (MCMC)).  Hence we lose the linearity (L),
+unbiasedness (U), and best (B), which came from multivariate normality.
+We also lose conditional expectation (no letter), which BLUP are,
+but \code{reaster} ``estimates'' (in scare quotes) of random effects are not.
+(If we wanted conditional expectations, we would need MCMC to obtain them.)
+
+So after all of that explanation of what these ``estimates'' (in scare quotes)
+are not, what are they?  For that we dive into the middle of the theory in
+\citet[Section~2]{reaster}.  There we have the denotations $\alpha$ for
+the vector of fixed effects, $b$ for the vector of random effects,
+and $\nu$ for the vector of variance components, and estimates thereof
+denoted $\hat{\alpha}$, $\hat{b}$, and $\hat{\nu}$ that jointly minimize
+equation (7) in \citet{reaster}, which can be called minus the
+objective function for this $M$-estimation ($M$ for minimization).
+
+
 
 \begin{thebibliography}{}
+
+\bibitem[Geyer(2021)]{aster-package}
+Geyer, C.~J. (2021).
+\newblock R package \texttt{aster}: Aster Models, version 1.1-2.
+\newblock \url{https://cran.r-project.org/package=aster}.
 
 \bibitem[Geyer, et al.(2022)Geyer, Kulbaba, Sheth, Pain, Eckhart,
     and Shaw]{zenodo}
@@ -202,6 +253,22 @@ Geyer, C.~J., Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M.,
 \newblock \doi{10.1111/evo.14607}.
 \newblock Supplementary material, version 2.0.1.
 \newblock \doi{10.5281/zenodo.7013098}.
+
+\bibitem[Geyer, et al.(2012)Geyer, Ridley, Latta, Etterson, and Shaw]{tr692}
+Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R and Shaw, R.~G.
+    (2012).
+\newblock Aster Models with Random Effects via Penalized Likelihood.
+\newblock Technical Report No. 692.  School of Statistics,
+    University of Minnesota.
+\newblock \url{https://hdl.handle.net/11299/135870}.
+
+\bibitem[Geyer, et al.(2013)Geyer, Ridley, Latta, Etterson, and Shaw]{reaster}
+Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R., and Shaw, R.~G.
+    (2013).
+\newblock Local Adaptation and genetic effects on fitness: Calculations for
+    exponential family models with random effects.
+\newblock \emph{Annals of Applied Statistics}, \textbf{7}, 1778--1795.
+\newblock \doi{10.1214/13-AOAS653}.
 
 \bibitem[Lande and Arnold(1983)]{lande-arnold}
 Lande, R. and Arnold, S.~J. (1983).
