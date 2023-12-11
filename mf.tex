@@ -7,6 +7,8 @@
 \usepackage[colorlinks=true,allcolors=blue]{hyperref}
 \usepackage{doi}
 
+\DeclareMathOperator{\var}{var}
+
 \let\code=\texttt
 
 \newcommand{\REVISED}{\begin{center} \LARGE REVISED DOWN TO HERE \end{center}}
@@ -106,78 +108,52 @@ The total change in mean fitness in from one generation to (the same point in) t
 We now decompose \eqref{eq:total-change} into a sum of three terms,
 each of which has a biological interpretation.
 
-\REVISED
-
-\subsection{Decomposition of Change in Mean Fitness}
-
-We break this up as the sum of three differences in mean fitness.
+First we look at the change in mean fitness due to change in environment
+(between the two years involved in this analysis), which we take to be
 \begin{subequations}
+\begin{equation} \label{eq:partial-change-environmental}
+   \sum\nolimits_i p_i^\text{prev}
+   \bigl( \hat{\mu}_i^\text{par} - \hat{\mu}_i^\text{prev} \bigr)
+\end{equation}
+
+Subtracting \eqref{eq:partial-change-environmental} from \eqref{eq:total-change}
+gives
+$$
+   \sum\nolimits_i \bigl(
+   \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off}
+   -
+   p_i^\text{prev} \hat{\mu}_i^\text{par}
+   \bigr)
+$$
+which we take to be the change in fitness due to genetics (we are now
+comparing parents and offspring in the same environment.
+
+Fisher's fundamental theorem of natural selection (FFTNS) does not try
+to predict all change in mean fitness but only that
+due to natural selection'' which is often taken to be
 \begin{equation} \label{eq:partial-change-fftns}
    \sum\nolimits_i
-   \bigl(\hat{q}_i^\text{prev} - p_i^\text{prev}\bigr) \hat{\mu}_i^\text{prev}
+   \bigl(\hat{q}_i^\text{prev} - p_i^\text{prev}\bigr) \hat{\mu}_i^\text{par}
 \end{equation}
-is the change in mean fitness that Fisher's fundamental theorem of
-natural selection tries to address (change in fitness due to natural
-selection), that is, this is the genetically based change in mean fitness within
-the generation/year in which selection takes place.
-\begin{equation} \label{eq:partial-change-environmental}
-    \sum\nolimits_i \hat{q}_i^\text{prev} \big(\hat{\mu}_i^\text{par} -
-    \hat{\mu}_i^\text{prev}\bigr)
-\end{equation}
-is the change in mean fitness due to any difference between the environmnets in the
-two years.
+
+Subtracting \eqref{eq:partial-change-fftns} from the unnumbered equation
+preceding it gives
 \begin{equation} \label{eq:partial-change-genetic-non-fftns}
     \sum\nolimits_i \hat{q}_i^\text{prev} \bigl(\hat{\mu}_i^\text{off} -
     \hat{\mu}_i^\text{par}\bigr)
 \end{equation}
-is the change in mean fitness due to differences in genetic composition of the
-parent and offspring groups not due to natural selection
-(something not addressed by Fisher's fundamental theorem).
+which we take to be the part of change in mean fitness that is genetic
+but not predicted by FFTNS.
 \end{subequations}
 
-\subsection{Another Decomposition of Change in Mean Fitness}
-
-If in \eqref{eq:total-change} we replace
-\begin{subequations}
-$\hat{\mu}_i^\text{prev}$ by $\hat{\mu}_i^\text{par}$ we obtain
-\begin{equation} \label{eq:partial-change-foo}
-   \sum\nolimits_i \bigl( \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off} -
-   p_i^\text{prev} \hat{\mu}_i^\text{par} \bigr)
-\end{equation}
-which compares offspring to parents in the same environment (year).
-So this estimates the combined genetically based change in mean fitness
-(both the part estimated by Fisher's fundamental theorem and the other
-part).
-
-Then
-\begin{equation} \label{eq:partial-change-bar}
-   \sum\nolimits_i {p}_i^\text{prev} \bigl(\hat{\mu}_i^\text{par} -
-    \hat{\mu}_i^\text{prev}\bigr)
-\end{equation}
-is the change in mean fitness due solely to different environments in the
-two years.  (This equation is just like
-\eqref{eq:partial-change-genetic-non-fftns} except the weights are different:
-\eqref{eq:partial-change-bar} uses the (assumed) population weights (before
-any of the experiments) and \eqref{eq:partial-change-genetic-non-fftns} 
-uses the weights after selection in the first subexperiment, which are the
-weights (according to theory) that apply to the offspring in both equations.
-
 It is easily checked that
-\eqref{eq:partial-change-fftns} plus
 \eqref{eq:partial-change-environmental} plus
+\eqref{eq:partial-change-fftns} plus
 \eqref{eq:partial-change-genetic-non-fftns} gives
 \eqref{eq:total-change}.  Thus we have decomposed the total change
 in mean fitness in one generation into three parts, one of which is
-the part of the change addressed by Fisher's fundamental theorem and the
+the part of the change addressed by FFTNS and the
 others have biological interpretations.
-\end{subequations}
-
-It is easily checked that
-\eqref{eq:partial-change-foo} plus
-\eqref{eq:partial-change-bar} gives
-\eqref{eq:total-change}.  Thus we have decomposed the total change
-in mean fitness in one generation into two parts, which
-have biological interpretations.
 
 We intend to estimate, discuss, and interpret each of these three differences
 separately.  We also need to derive standard errors for each.
@@ -202,7 +178,7 @@ the variance-covariance matrix of the parameter estimates.
 
 R function \code{reaster} also provides ``estimates'' (in scare quotes)
 of random effects.  Of course, random effects are not constants to estimate,
-so these are like parameter estimates.  They estimate \emph{something}, but
+so these are not like parameter estimates.  They estimate \emph{something}, but
 what?
 
 In classical quantitative genetics where all random variables in the model
@@ -219,7 +195,7 @@ One can think of R function \code{reaster}'s ``estimates'' (in scare quotes)
 of random effects as being analogs of BLUP's except without the B, L, and U.
 Because the response in an aster model is not taken to be normally distributed,
 the conditional distribution of random effects given observed response is
-not normally distributed (and is unknown so could only be investigated
+not normally distributed (and has no formula so could only be calculated
 using Markov chain Monte Carlo (MCMC)).  Hence we lose the linearity (L),
 unbiasedness (U), and best (B), which came from multivariate normality.
 We also lose conditional expectation (no letter), which BLUP are,
@@ -232,8 +208,31 @@ are not, what are they?  For that we dive into the middle of the theory in
 the vector of fixed effects, $b$ for the vector of random effects,
 and $\nu$ for the vector of variance components, and estimates thereof
 denoted $\hat{\alpha}$, $\hat{b}$, and $\hat{\nu}$ that jointly minimize
-equation (7) in \citet{reaster}, which can be called minus the
-objective function for this $M$-estimation ($M$ for minimization).
+\begin{equation} \label{eq:pee}
+   p(\alpha, b, \nu)
+   =
+   - l(a + M \alpha + Z b)
+   + \tfrac{1}{2} b^T D^{-1} b
+   + \tfrac{1}{2} \log
+   \det\bigl[ Z^T \widehat{W} Z D + I \bigr]
+\end{equation}
+which is equation (7) in \citet{reaster}, where
+\begin{itemize}
+\item $l$ is the log likelihood function for the saturated model
+    unconditional canonical parameter vector $\varphi$,
+\item $a$ is the offset vector,
+\item $M$ is the model matrix for fixed effects,
+\item $Z$ is the model matrix for random effects,
+\item $D$ is the variance-covariance matrix for random effects,
+    which is assumed to be diagonal with diagonal components that
+    are equal to components of the parameter vector $\nu$,
+\item $\widehat{W}$ is a symmetric positive definite matrix that is supposed
+    to be close to $W(a + M \hat{\alpha} + Z \hat{b})$
+    where $W(\varphi) = \var_\varphi(Y)$, that is, we pretend $\widehat{W}$
+    is a known constant (matrix) where it is actually estimated, and
+\item $I$ is the identity matrix of the appropriate dimension (number
+    of random effects.
+\end{itemize}
 
 
 
@@ -274,6 +273,11 @@ Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R., and Shaw, R.~G.
 Lande, R. and Arnold, S.~J. (1983).
 \newblock The measurement of selection on correlated characters.
 \newblock \emph{Evolution}, \textbf{37}, 1210--1226.
+
+\bibitem[van der Vaart(1998)]{vdv}
+van der Vaart, A.~W. (1998).
+\newblock \emph{Asymptotic Statistics}.
+\newblock Cambridge University Press.
 
 \end{thebibliography}
 
