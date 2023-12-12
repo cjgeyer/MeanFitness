@@ -8,6 +8,7 @@
 \usepackage{doi}
 
 \DeclareMathOperator{\var}{var}
+\DeclareMathOperator{\tr}{tr}
 
 \let\code=\texttt
 
@@ -234,7 +235,39 @@ which is equation (7) in \citet{reaster}, where
     of random effects.
 \end{itemize}
 
+Since our vector of estimates $(\hat{\alpha}, \hat{b}, \hat{\nu})$ is
+the joint minimzer of \eqref{eq:pee}, the asymptotic distribution follows
+from the usual asymptotics of $M$-estimates.  The asymptotic distribution
+should be normal centered at whatever values make the derivatives of
+\eqref{eq:pee} unbiased estimating equations.
 
+Those first derivatives are given in Section~1.7 of \citet{tr692}
+\begin{subequations}
+\begin{equation} \label{eq:p-alpha}
+   p_\alpha(\alpha, b, \nu)
+   =
+   - M^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr]
+\end{equation}
+\begin{equation} \label{eq:p-b}
+   p_b(\alpha, b, \nu)
+   =
+   - Z^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr] + D^{- 1} b
+\end{equation}
+and
+\begin{equation} \label{eq:p-nu}
+   p_{\nu_k}(\alpha, b, \nu)
+   =
+   - \tfrac{1}{2} b^T D^{- 1} E_k D^{- 1} b
+   + \tfrac{1}{2} \tr \Bigl(
+   \bigl[ Z^T \widehat{W} Z D + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_k
+   \Bigr)
+\end{equation}
+\end{subequations}
+where $E_k = \partial D / \partial \nu_k$ is a matrix of the same dimensions
+as $D$ that indicates which elements of the diagonal of $D$ are equal to
+$\nu_k$ (by definition, not by accident) and where $\tr$ is the trace operator
+that returns the trace of a matrix.
 
 \begin{thebibliography}{}
 
