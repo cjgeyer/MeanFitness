@@ -2,6 +2,7 @@
 \documentclass[11pt]{article}
 
 \usepackage{amsmath}
+\usepackage{booktabs}
 \usepackage{indentfirst}
 \usepackage{natbib}
 \usepackage[colorlinks=true,allcolors=blue]{hyperref}
@@ -45,10 +46,12 @@ or doing other mathematical sensitivity analysis).
 The particular experiment at hand has five subexperiments laid out as follows.
 \begin{center}
 \begin{tabular}{ccc}
+\toprule
 year one & year two & year three \\
-\hline
+\midrule
 parents & parents & parents \\
-        & offspring & offspring
+        & offspring & offspring \\
+\bottomrule
 \end{tabular}
 \end{center}
 Here ``parents'' means individuals produced by the experimental crosses (seeds from
@@ -76,9 +79,9 @@ that subexperiment, where the sum runs over all families.
 
 We also need to know the (estimated) population frequency
 \emph{after selection}, which is
-$$
+\begin{equation*}
    \hat{q}_i = \frac{p_i \hat{\mu}_i}{\sum_j p_j \hat{\mu}_j}
-$$
+\end{equation*}
 where the sum in the denominator runs over all families.
 (This is standard in quantitative genetics, \citet{lande-arnold},
 breeder's equation,
@@ -119,15 +122,15 @@ First we look at the change in mean fitness due to change in environment
 
 Subtracting \eqref{eq:partial-change-environmental} from \eqref{eq:total-change}
 gives
-$$
+\begin{equation*}
    \sum\nolimits_i \bigl(
    \hat{q}_i^\text{prev} \hat{\mu}_i^\text{off}
    -
    p_i^\text{prev} \hat{\mu}_i^\text{par}
    \bigr)
-$$
+\end{equation*}
 which we take to be the change in fitness due to genetics (we are now
-comparing parents and offspring in the same environment.
+comparing parents and offspring in the same environment).
 
 Fisher's fundamental theorem of natural selection (FFTNS) does not try
 to predict all change in mean fitness but only that
@@ -144,7 +147,7 @@ preceding it gives
     \hat{\mu}_i^\text{par}\bigr)
 \end{equation}
 which we take to be the part of change in mean fitness that is genetic
-but not predicted by FFTNS.
+but not predicted by FFTNS\@.
 \end{subequations}
 
 It is easily checked that
@@ -165,7 +168,8 @@ separately.  We also need to derive standard errors for each.
 
 In aster models with random effects \citep*{reaster} we have fixed effects
 and random effects.  Fixed effects are unknown parameters to estimate.
-Random effects are not.  They are random variables whose variances are
+Random effects are not.  They are (theoretical, hypothetical, unobservable,
+latent, hidden, and perhaps other names) random variables whose variances are
 unknown parameters to estimate (so-called \emph{variance components}).
 
 R function \code{reaster} in R package \code{aster} \citep{aster-package}
@@ -188,12 +192,15 @@ BLUP (best linear unbiased predictors) of the random effects.  These
 are conditional expectations of random effects given the observed value
 of the response (quantitative trait), and these are linear functions
 of the response vector (because conditional expectations of multivariate
-normal are linear) and unbiased (also a property of multivariate normal)
+normal are linear in the conditioning variables) and unbiased
+(also a property of multivariate normal)
 and best in the sense of having smaller variance than any other linear
 unbiased predictions.
 
 One can think of R function \code{reaster}'s ``estimates'' (in scare quotes)
 of random effects as being analogs of BLUP's except without the B, L, and U.
+(Anything we use as a prediction is thereby a prediction, hence they are
+still P.)
 Because the response in an aster model is not taken to be normally distributed,
 the conditional distribution of random effects given observed response is
 not normally distributed (and has no formula so could only be calculated
@@ -204,72 +211,72 @@ but \code{reaster} ``estimates'' (in scare quotes) of random effects are not.
 (If we wanted conditional expectations, we would need MCMC to obtain them.)
 
 So after all of that explanation of what these ``estimates'' (in scare quotes)
-are not, what are they?  For that we dive into the middle of the theory in
-\citet[Section~2]{reaster}.  There we have the denotations $\alpha$ for
+are not, what are they?  For that we dive into the theory in
+\citet[Section~2]{reaster}.  There we have the notations $\alpha$ for
 the vector of fixed effects, $b$ for the vector of random effects,
-and $\nu$ for the vector of variance components, and estimates thereof
-denoted $\hat{\alpha}$, $\hat{b}$, and $\hat{\nu}$ that jointly minimize
-\begin{equation} \label{eq:pee}
-   p(\alpha, b, \nu)
-   =
-   - l(a + M \alpha + Z b)
-   + \tfrac{1}{2} b^T D^{-1} b
-   + \tfrac{1}{2} \log
-   \det\bigl[ Z^T \widehat{W} Z D + I \bigr]
+and $\nu$ for the vector of variance components, and
+$\hat{\alpha}$, $\hat{b}$, and $\hat{\nu}$ for the estimates thereof.
+
+The \emph{complete data log likelihood} (what the log likelihood would be
+if the random effects were observed data) is
+\begin{equation} \label{eq:logl-complete}
+   l(a + M \alpha + Z b) - \tfrac{1}{2} b^T D^{-1} b
+   - \tfrac{1}{2} \log \det(D)
 \end{equation}
-which is equation (7) in \citet{reaster}, where
+(this is minus equation (3) in \citet{reaster}), where
 \begin{itemize}
-\item $l$ is the log likelihood function for the saturated model
+\item $l$ is the log likelihood function for the saturated aster model
     unconditional canonical parameter vector $\varphi$,
+    which is a function of the response vector $y$ even though $y$
+    does not appear explicitly in the right-hand side
+    of \eqref{eq:logl-complete},
 \item $a$ is the offset vector,
 \item $M$ is the model matrix for fixed effects,
-\item $Z$ is the model matrix for random effects,
+\item $Z$ is the model matrix for random effects, and
 \item $D$ is the variance-covariance matrix for random effects,
     which is assumed to be diagonal with diagonal components that
-    are equal to components of the parameter vector $\nu$,
-\item $\widehat{W}$ is a symmetric positive definite matrix that is supposed
-    to be close to $W(a + M \hat{\alpha} + Z \hat{b})$
-    where $W(\varphi) = \var_\varphi(Y)$, that is, we pretend $\widehat{W}$
-    is a known constant (matrix) where it is actually estimated, and
-\item $I$ is the identity matrix of the appropriate dimension (number
-    of random effects.
+    are equal to components of the parameter vector $\nu$ (so,
+    although $\nu$ does not appear explicitly in the right-hand side
+    of \eqref{eq:logl-complete}, it is there implicitly
+    because $D$ is a function of $\nu$).
 \end{itemize}
+The notation $D^{-1}$ assumes the matrix $D$ is invertible, which it is
+if none of the variance components are zero (the case of zero variance
+components is handled by R function \code{reaster} and is discussed
+by \citet{reaster} but we ignore that here).
 
-Since our vector of estimates $(\hat{\alpha}, \hat{b}, \hat{\nu})$ is
-the joint minimzer of \eqref{eq:pee}, the asymptotic distribution follows
-from the usual asymptotics of $M$-estimates.  The asymptotic distribution
-should be normal centered at whatever values make the derivatives of
-\eqref{eq:pee} unbiased estimating equations.
-
-Those first derivatives are given in Section~1.7 of \citet{tr692}
-\begin{subequations}
-\begin{equation} \label{eq:p-alpha}
-   p_\alpha(\alpha, b, \nu)
-   =
-   - M^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr]
-\end{equation}
-\begin{equation} \label{eq:p-b}
-   p_b(\alpha, b, \nu)
-   =
-   - Z^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr] + D^{- 1} b
-\end{equation}
-and
-\begin{equation} \label{eq:p-nu}
-   p_{\nu_k}(\alpha, b, \nu)
-   =
-   - \tfrac{1}{2} b^T D^{- 1} E_k D^{- 1} b
-   + \tfrac{1}{2} \tr \Bigl(
-   \bigl[ Z^T \widehat{W} Z D + I \bigr]^{- 1}
-   Z^T \widehat{W} Z E_k
-   \Bigr)
-\end{equation}
-\end{subequations}
-where $E_k = \partial D / \partial \nu_k$ is a matrix of the same dimensions
-as $D$ that indicates which elements of the diagonal of $D$ are equal to
-$\nu_k$ (by definition, not by accident) and where $\tr$ is the trace operator
-that returns the trace of a matrix.
+Considered as a function of $b$ for fixed $\alpha$, $\nu$, and $y$,
+\eqref{eq:logl-complete} is the log unnormalized probability density of the
+conditional distribution of $b$ given $y$.  As argued by \citet{reaster},
+for fixed $\alpha$, $\nu$, and $y$, \eqref{eq:logl-complete} has a unique
+maximizer (maximizing over $b$), which we denote $b^*(\alpha, \nu, y)$.
+Since this maximizes the conditional probability density, this is the
+\emph{mode} of the conditional distribution of $b$ given $y$.
+When we plug in approximate maximum likelihood estimates for the unknown
+parameters we obtain
+\begin{equation*}
+   \hat{b} = b^*(\hat{\alpha}, \hat{\nu}, y)
+\end{equation*}
+which are the $b$ returned by R function \code{reaster} and which are thus
+\emph{estimates} of the conditional distribution of random effects given
+observed data.  (BLUP have the same issue.  The term BLUP only describes
+what would be obtained if the true unknown parameter values were used in
+the calculation.  If estimates are used instead, then sometimes the
+initialism EBLUP, for empirical BLUP, is used to indicate that.)
+So if we want an initialism, the random effects estimates $\hat{b}$ returned
+by R function \code{reaster}, are ECMP (empirical conditional mode predictors),
+and the same calculation with true unknown parameter values used instead
+of estimates would be CMP (conditional mode predictors).
+CMP are what ECMP are estimating.
 
 \begin{thebibliography}{}
+
+% \bibitem[Breslow and Clayton(1993)]{breslow-clayton}
+% Breslow, N.~E., and Clayton, D.~G. (1993).
+% \newblock Approximate inference in generalized linear mixed models.
+% \newblock \emph{Journal of the American Statistical Association},
+%     \textbf{88}, 9--25.
+% \newblock \doi{10.1080/01621459.1993.10594284}.
 
 \bibitem[Geyer(2021)]{aster-package}
 Geyer, C.~J. (2021).
@@ -307,10 +314,10 @@ Lande, R. and Arnold, S.~J. (1983).
 \newblock The measurement of selection on correlated characters.
 \newblock \emph{Evolution}, \textbf{37}, 1210--1226.
 
-\bibitem[van der Vaart(1998)]{vdv}
-van der Vaart, A.~W. (1998).
-\newblock \emph{Asymptotic Statistics}.
-\newblock Cambridge University Press.
+% \bibitem[van der Vaart(1998)]{vdv}
+% van der Vaart, A.~W. (1998).
+% \newblock \emph{Asymptotic Statistics}.
+% \newblock Cambridge University Press.
 
 \end{thebibliography}
 
