@@ -8,6 +8,8 @@
 \usepackage[colorlinks=true,allcolors=blue]{hyperref}
 \usepackage{doi}
 
+\newcommand{\fatdot}{\,\cdot\,}
+
 \DeclareMathOperator{\var}{var}
 \DeclareMathOperator{\tr}{tr}
 
@@ -18,18 +20,28 @@
 
 \begin{document}
 
-\title{Estimating Population Mean Fitness and Change Thereof When
-    the Population Distribution is Unknown}
+\title{Decomposing Change in Population Mean Fitness}
 
 \author{Charles J. Geyer \and Ruth G. Shaw}
 
 \maketitle
 
+\begin{abstract}
+We previously measured mean fitness and additive genetic variance
+under wild conditions in an annual plant \emph{Chamaecrista fasciculata}.
+Here we analyze change in mean fitness across one generation and
+decompose that into three parts: change predicted by Fisher's
+fundamental theorem of natural selection, environmental change,
+and the part of genetic change not addressed by Fisher's fundamental
+theorem.  We also provide standard errors for these estimates.
+\end{abstract}
+
 \section{Estimates}
 
 \subsection{Experiment}
 
-We have an experiment in which (Darwinian) fitness (measured as lifetime
+We have an experiment \citep{kulbaba,zenodo} in which (Darwinian) fitness
+(measured as lifetime
 number of offspring per individual) was measured under wild conditions.
 The individuals in the experiment were not a random sample from
 a population but rather offspring from crosses in the experimental design having distinct sets of maternal
@@ -54,7 +66,8 @@ parents & parents & parents \\
 \bottomrule
 \end{tabular}
 \end{center}
-Here ``parents'' means individuals produced by the experimental crosses (seeds from
+Here ``parents'' means individuals produced by the experimental crosses
+(seeds from
 the same crosses were planted in each year).  For short, we will say these
 individuals are from the same ``family'' if they are known sibs
 (that is, have the same sire in the experimental crosses).
@@ -69,7 +82,9 @@ If
 \begin{itemize}
 \item $p_i$ is the (assumed) population frequency of family $i$
     (perhaps assumed to be equal for all $i$, perhaps not), and
-\item $\hat{\mu}_i$ is (estimated) mean fitness for family $i$,
+\item $\hat{\mu}_i$ is (estimated) mean fitness for family $i$
+    (this comes from an aster model with random effects as shown by
+    \citet{kulbaba} and \citet{zenodo},
 \end{itemize}
 then
 \begin{itemize}
@@ -85,7 +100,8 @@ We also need to know the (estimated) population frequency
 where the sum in the denominator runs over all families.
 (This is standard in quantitative genetics, \citet{lande-arnold},
 breeder's equation,
-and so forth, but does not account for recombination and other effects.)
+and so forth, but does not account for recombination and other effects
+\citep{pr70,pr72}.)
 
 Now we need to consider three subexperiments
 \begin{itemize}
@@ -134,7 +150,7 @@ comparing parents and offspring in the same environment).
 
 Fisher's fundamental theorem of natural selection (FFTNS) does not try
 to predict all change in mean fitness but only that
-due to natural selection'' which is often taken to be
+``due to natural selection'' which is often taken to be
 \begin{equation} \label{eq:partial-change-fftns}
    \sum\nolimits_i
    \bigl(\hat{q}_i^\text{prev} - p_i^\text{prev}\bigr) \hat{\mu}_i^\text{par}
@@ -147,7 +163,7 @@ preceding it gives
     \hat{\mu}_i^\text{par}\bigr)
 \end{equation}
 which we take to be the part of change in mean fitness that is genetic
-but not predicted by FFTNS\@.
+but not predicted by FFTNS (not ``due to natural selection'').
 \end{subequations}
 
 It is easily checked that
@@ -200,7 +216,7 @@ unbiased predictions.
 One can think of R function \code{reaster}'s ``estimates'' (in scare quotes)
 of random effects as being analogs of BLUP's except without the B, L, and U.
 (Anything we use as a prediction is thereby a prediction, hence they are
-still P.)
+trivially still P.)
 Because the response in an aster model is not taken to be normally distributed,
 the conditional distribution of random effects given observed response is
 not normally distributed (and has no formula so could only be calculated
@@ -217,13 +233,14 @@ the vector of fixed effects, $b$ for the vector of random effects,
 and $\nu$ for the vector of variance components, and
 $\hat{\alpha}$, $\hat{b}$, and $\hat{\nu}$ for the estimates thereof.
 
-The \emph{complete data log likelihood} (what the log likelihood would be
-if the random effects were observed data) is
+Minus the \emph{complete data log likelihood} (what the log likelihood would
+be if the random effects were observed data) is
 \begin{equation} \label{eq:logl-complete}
-   l(a + M \alpha + Z b) - \tfrac{1}{2} b^T D^{-1} b
-   - \tfrac{1}{2} \log \det(D)
+   - l(a + M \alpha + Z b) + \tfrac{1}{2} b^T D^{-1} b
+   + \tfrac{1}{2} \log \det(D)
 \end{equation}
-(this is minus equation (3) in \citet{reaster}), where
+(equation (4) in \citet{reaster}, minus because they want to minimize
+rather than maximize), where
 \begin{itemize}
 \item $l$ is the log likelihood function for the saturated aster model
     unconditional canonical parameter vector $\varphi$,
@@ -243,13 +260,16 @@ if the random effects were observed data) is
 The notation $D^{-1}$ assumes the matrix $D$ is invertible, which it is
 if none of the variance components are zero (the case of zero variance
 components is handled by R function \code{reaster} and is discussed
-by \citet{reaster} but we ignore that here).
+by \citet{reaster} but we ignore that here; if the genetic variance
+were estimated to be zero, then the $\hat{b}$ would be zero for
+all individuals, and we would have no estimated change in mean fitness).
 
 Considered as a function of $b$ for fixed $\alpha$, $\nu$, and $y$,
-\eqref{eq:logl-complete} is the log unnormalized probability density of the
+\eqref{eq:logl-complete} is minus the log unnormalized probability density
+function of the
 conditional distribution of $b$ given $y$.  As argued by \citet{reaster},
 for fixed $\alpha$, $\nu$, and $y$, \eqref{eq:logl-complete} has a unique
-maximizer (maximizing over $b$), which we denote $b^*(\alpha, \nu, y)$.
+minimizer (minimizing over $b$), which we denote $b^*(\alpha, \nu, y)$.
 Since this maximizes the conditional probability density, this is the
 \emph{mode} of the conditional distribution of $b$ given $y$.
 When we plug in approximate maximum likelihood estimates for the unknown
@@ -268,6 +288,99 @@ by R function \code{reaster}, are ECMP (empirical conditional mode predictors),
 and the same calculation with true unknown parameter values used instead
 of estimates would be CMP (conditional mode predictors).
 CMP are what ECMP are estimating.
+
+In hindsight BLUP are also CMP, because normal distributions (and
+conditional distributions of multivariate normal are again multivariate normal)
+are symmetric and unimodal so the mean, median, and mode are the same.
+Thus, when thought about the right way, CMP are generalizations of BLUP.
+
+One tricky thing about CMP: we are not thinking of $y$ as a random variable
+but rather as an ordinary variable (as in mathematics outside of probability
+theory).  A conditional mode (or a conditional \emph{anything}) is a function
+of the conditioning variable.
+So we can think of $b^*(\hat{\alpha}, \hat{\nu}, \fatdot)$ as a function
+(of its third argument).  R function \code{reaster} returns the value
+of this function for the observed data, but we could, in principle, evaluate
+this function for any data.  So the error in our ECMP is not in $y$, it is
+in $\hat{\alpha}$ and $\hat{\nu}$ not being equal to (the true unknown)
+$\alpha$ and $\nu$.
+
+Standard errors for any function of parameters are given by the multivariable
+delta method.  To apply the delta method to $b^*$ we need derivatives
+with respect to its first two arguments.
+
+These derivatives are given in the technical report \citep{tr692} that
+is the supplementary material for the paper \citet{reaster}.  Equations
+(16) and (17) in that technical report are
+\begin{subequations}
+\begin{align}
+   b^*_\alpha(\alpha, \nu)
+   & =
+   -
+   p_{b b}(\alpha, b^*, \nu)^{-1} p_{b \alpha}(\alpha, b^*, \nu)
+   \label{eq:b-star-alpha}
+   \\
+   b^*_{\nu}(\alpha, \nu)
+   & =
+   -
+   p_{b b}(\alpha, b^*, \nu)^{-1} p_{b \nu}(\alpha, b^*, \nu)
+   \label{eq:b-star-nu}
+\end{align}
+\end{subequations}
+where \citet{tr692} drop the dependence of $b^*$ on $y$ from their
+notation and $p$
+can be taken to be
+\begin{equation} \label{eq:pee}
+   p(\alpha, b, \nu) =
+   - l(a + M \alpha + Z b) + \tfrac{1}{2} b^T D^{-1} b
+\end{equation}
+(the terms of \eqref{eq:logl-complete} that depend on $b$; this is not
+what \citet{tr692} take $p$ to be, but their definition agrees with ours
+in the terms that depend on $b$). 
+In \eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu} subscripts
+denote partial derivatives: $b^*_\alpha(\alpha, \nu)$ is a vector
+whose components are $\partial b^*(\alpha, \nu) / \partial \alpha_i$
+and similarly for derivatives with respect to components of $\nu$.
+
+The second derivatives that appear on the right-hand side of
+\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu} are given
+in Section~1.8 of \citet{tr692} and repeated here
+\begin{equation} \label{eq:second-pee}
+\begin{split}
+   p_{b \alpha}(\alpha, b, \nu)
+   & =
+   M^T W(a + M \alpha + Z b) Z
+   \\
+   p_{b b}(\alpha, b, \nu)
+   & =
+   Z^T W(a + M \alpha + Z b) Z + D^{- 1}
+   \\
+   p_{b \nu_k}(\alpha, b, \nu)
+   & =
+   - D^{- 1} E_k D^{- 1} b
+\end{split}
+\end{equation}
+where
+\begin{equation*}
+   E_k = D_{\nu_k}(\nu)
+\end{equation*}
+is the diagonal matrix whose components are equal to one
+if the corresponding components of $D$ are equal to $\nu_k$ by
+definition (rather than by accident when some other component of $\nu$
+also has the same value) and whose components are otherwise zero
+and $p_{b \alpha}(\alpha, b, \nu)$ is the matrix whose $i, j$ component is
+$\partial^2 p_{b \alpha}(\alpha, b, \nu) / \partial b_i \partial \alpha_j$.
+
+So now we need to know whether there is a function in R package \code{aster}
+that calculates these derivatives
+\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}.  Unfortunately,
+the answer to that seems to be no.
+R function \code{quickle} does calculate the second derivatives
+\eqref{eq:second-pee} but uses them to calculate something else
+(so it does not return either \eqref{eq:second-pee} or
+\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}, hence we can
+copy some of the code of that function in our own function to calculate
+\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}).
 
 \begin{thebibliography}{}
 
@@ -309,10 +422,29 @@ Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R., and Shaw, R.~G.
 \newblock \emph{Annals of Applied Statistics}, \textbf{7}, 1778--1795.
 \newblock \doi{10.1214/13-AOAS653}.
 
+\bibitem[Kulbaba, et al.(2019)Kulbaba, Sheth, Pain, Eckhart, and Shaw]{kulbaba}
+Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M., and
+    Shaw, R.~G. (2019).
+\newblock Additive genetic variance for lifetime fitness and the capacity
+    for adaptation in an annual plant.
+\newblock \emph{Evolution}, \textbf{73}, 1746--1758.
+\newblock \doi{10.1111/evo.13830}.
+\newblock Correction: \citet{zenodo}.
+
 \bibitem[Lande and Arnold(1983)]{lande-arnold}
 Lande, R. and Arnold, S.~J. (1983).
 \newblock The measurement of selection on correlated characters.
 \newblock \emph{Evolution}, \textbf{37}, 1210--1226.
+
+\bibitem[Price(1970)]{pr70}
+Price, G.~R. (1970).
+\newblock Selection and covariance.
+\newblock \emph{Nature}, \textbf{227}, 520--521.
+
+\bibitem[Price(1972)]{pr72}
+Price, G.~R. (1972).
+\newblock Extension of covariance selection mathematics.
+\newblock \emph{Annals of Human Genetics}, \textbf{35}, 485--490.
 
 % \bibitem[van der Vaart(1998)]{vdv}
 % van der Vaart, A.~W. (1998).
