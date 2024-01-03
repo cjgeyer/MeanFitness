@@ -270,24 +270,51 @@ Drop unused levels.
 subdat <- droplevels(subdat)
 subdatfield <- droplevels(subdatfield)
 ```
-Find grandfathers
+## Find Grandfathers
+
+Now we have to look up grandfathers of the offspring generation.
+To do this we have to look up data in another file
+and use R function `match`.
 ```{r findGDs2016}
 plantingdat2015 <- read.csv("KW_2015_planting_data.csv")
 names(plantingdat2015)
 idx <- match(subdatfield$position, plantingdat2015$position)
 length(idx)
 head(idx)
+```
+Every plant is in a certain row and position within row.
+We combine these into one key.
+```{r findGDs2016.too}
 pos_row <- with(subdatfield, paste(position,row,sep="_"))
 head(pos_row)
 pos_row_planting2015 <- with(plantingdat2015, paste(position,row,sep="_"))
 idx <- match(pos_row, pos_row_planting2015)
+```
+Now R vector `idx` tells us which individuals in R data frame `subdatfield`
+correspond to which individuals in R dataframe `plantingdat2015`, that is,
+```{r findGDs2016.too.show}
+identical(pos_row, pos_row_planting2015[idx])
+```
+The fact that there are no `NA` values in `idx` means every individual in
+data frame `subdatfield` has been found in dataframe `plantingdat2015`.
+```{r findGDs2016.too.show.too}
 all(! is.na(idx))
-matloc <- with(plantingdat2015, paste(maternalposition[idx],maternalrow[idx],sep="_"))
-matlocsubdat <- with(subdat, paste(position,row,sep="_"))
+```
+
+Now we do the find the dams of these individuals.
+
+```{r findGDs2016.too.too}
+matloc <- with(plantingdat2015,
+    paste(maternalposition[idx], maternalrow[idx], sep="_"))
+matlocsubdat <- with(subdat, paste(position, row, sep="_"))
 idx2 <- match(matloc, matlocsubdat)
 all(! is.na(idx2))
-length(idx2)
-nrow(subdatfield)
+length(idx2) == nrow(subdatfield)
+```
+So now `idx2` gives the index in `subdat` of the mother of the individual
+in the corresponding position in `subdatfield`.  So the following adds
+a maternal grandfather variable to R data frame `subdatfield`.
+```{r findGDs2016.too.too.too}
 subdatfield <- transform(subdatfield, grandfather=subdat$paternalID[idx2])
 
 names(subdatfield)
