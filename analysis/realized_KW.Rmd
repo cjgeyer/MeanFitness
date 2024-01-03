@@ -22,22 +22,27 @@ link-citations: true
 ---
 
 # Abstract
-This work builds on the correction of @kulbaba-et-al to obtain estimates of the realized response to natural selection.
+This work builds on @kulbaba-et-al and @zenodo to obtain estimates of the realized response to natural selection.
 
-In our paper, @kulbaba-et-al,
-we used aster analyses of records of components of fitness for three populations of *Chamaecrista fasciculata*, 
-each grown in its home location in three years. It is not feasible to obtain every fruit before it dehisces and releases its seeds. 
-For this reason and also because, in this and many other species, fruits may be numerous, it is common practice to obtain seed counts 
-from a subset of fruits. Aster methodology can account for such subsampling of a fitness node, and our aster models did so. 
-The error arose in the process of obtaining estimates of mean fitness and additive genetic variance for fitness. 
-Specifically, the proportion of fruits sampled to obtain seed counts was correctly included in the aster models,
-but the code to obtain estimates from these models did not account for the subsampling to scale up to the total number of seeds individuals produced. 
-This document presents reanalyses correcting this error by implementing calculations described by @aster2, Section 8
-of @tr661, and the Supplementary Material of @stanton-geddes-tiffin-shaw.
-Our reanalysis shows that the error did not affect the major qualitative conclusions, though numerical values differ.
-Unrelated to the matter of subsampling, we here also shift from treating "block" as a fixed factor to treating it as random. Either choice is
-justifiable; particularly because of the nonlinearity of parameterizations of generalized linear models and aster models, the choice to treat blocks as
-random simplifies interpretation.
+@kulbaba-et-al and the correction to it [@zenodo]
+presented estimates of mean fitness and additive genetic variance for fitness
+we obtained for three populations of *Chamaecrista fasciculata*,
+each grown in its home location in three years via aster analyses of records of components of fitness for a pedigreed set of individuals.
+Here, we consider the realized change in mean fitness from one generation to the next, for comparison with the prediction from Fisher's
+Fundamental Theorem of Natural Selection.
+As a guide, we have the document `mf.pdf` (in the same git repository as
+this document), which develops a partitioning of the
+overall change in mean fitness, showing a portion of the change that is due to change in genetic composition
+(i.e. representation of the paternal families) and a portion that is due to difference in environmental conditions between years.
+The genetic portion is then further partitioned into the part "due to natural
+selection", which is described by Fisher's fundamental theorem of natural selection, and the remainder.
+Here, we obtain estimates of a) mean fitness of the pedigreed parental populations before selection (previously presented in @kulbaba-et-al and the
+Correction); b) mean fitness of the pedigreed parental population after selection (i.e. accounting for the change in representation of the families
+reflected in differential seed production); and mean fitness of the offspring of the pedigreed sets
+(i.e. the outcome of natural selestion on the parental
+generation when grown in the same sites in the following year).
+
+We also obtain standard errors of our estimates.
 
 # License
 
@@ -61,9 +66,6 @@ CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
  * The version of the `numDeriv` package used to make this document is
    `r packageVersion("numDeriv")`.
 
- * The version of the `kableExtra` package used to make this document is
-   `r packageVersion("kableExtra")`.
-
 As far as we know, any fairly recent version of R or these packages
 will do for processing this Rmarkdown document.  We are not using
 cutting edge features.
@@ -72,18 +74,14 @@ Attach packages.
 ```{r package}
 library("aster")
 library("numDeriv")
-library("kableExtra")
 ```
 
 # Data
 
-The data files are
+For the analyses in @kulbaba-et-al and @zenodo the data files are
 ```
-#gcdata.csv 
-GC_3yr_seedpool.csv
-#kwdata.csv
+GCdat.csv
 KWdat.csv
-#csdata.csv
 csdat.csv
 ```
 for 
@@ -100,6 +98,15 @@ These data files were downloaded from the GitHub repository
 https://github.com/mason-kulbaba/adaptive-capacity which
 contains the code and data for the analysis of the original paper.
 So we are using the same data but doing a different analysis.
+
+For this document the data files are
+```
+KWdat.csv
+KW_2015_planting_data.csv
+```
+The former is the same data used by @kulbaba-et-al and @zenodo
+and the latter contains pedigree information we need to match up
+offspring with parents and grandparents.
 
 # Introduction
 
@@ -150,14 +157,13 @@ We start by doing one example, but we do it in such a way that code
 can be reused for all analyses.  The following two variables determine
 (entirely) the analysis to be done.
 ```{r mydata.myyear}
-#mydata <- "gcdata.csv"
-mydata <- "../KWdat.csv"
+mydata <- "KWdat.csv"
 myyear <- 2015
 ```
 We also need to specify the year of the corresponding set of offspring.
 
 ```{r myyearf}
-myyearf <- 2016
+myyearf <- myyear + 1
 ```
 
 ## Read Data
@@ -247,6 +253,7 @@ unique(subdat$year)
 
 ## Subset Data for offspring cohort (field)
 
+Now for offspring data.
 Subset the data to get one part we want to analyze separately.
 Other parts are analyzed in the same way.
 Divide into year-specific files.
@@ -274,11 +281,11 @@ pos_row <- with(subdatfield, paste(position,row,sep="_"))
 head(pos_row)
 pos_row_planting2015 <- with(plantingdat2015, paste(position,row,sep="_"))
 idx <- match(pos_row, pos_row_planting2015)
-sum(is.na(idx))
+all(! is.na(idx))
 matloc <- with(plantingdat2015, paste(maternalposition[idx],maternalrow[idx],sep="_"))
 matlocsubdat <- with(subdat, paste(position,row,sep="_"))
 idx2 <- match(matloc, matlocsubdat)
-sum(is.na(idx2))
+all(! is.na(idx2))
 length(idx2)
 nrow(subdatfield)
 subdatfield <- transform(subdatfield, grandfather=subdat$paternalID[idx2])
@@ -344,8 +351,10 @@ my.b <- with(rout, b[grep("paternal", names(b))])
 
 ## Random Effect Aster Model for offspring generation ('field')
 
-The offspring generation arose via open pollination of the pedigreed generation. For this reason, we do not know paternity of individuals in this generation. Eventually, we want
-mean fitnesses for families descending from individual sires in the set of crosses that produced the pedigreed generation. As an initial pass, we carry out random effects analysis 
+The offspring generation arose via open pollination of the pedigreed generation. 
+For this reason, we do not know paternity of individuals in this generation. We focus on 
+mean fitnesses for families descending from individual sires in the set of crosses that produced the pedigreed generation. 
+For interest's sake, we also carry out random effects analysis 
 with maternal plant in the pedigreed generation as the random factor.
 
 
@@ -363,27 +372,39 @@ dim(modmat.grandfather)
 key <- tools::md5sum(mydata)
 ```
 Then we can fit the model.
-```{r checkerrors}
+```{r checkerrors, eval=FALSE, echo=FALSE}
+# make (after this) all code chunks have option error=TRUE
+# currently turned off
+# change eval=FALSE to eval=TRUE (the default) to have this effect
 knitr::opts_chunk$set(error=TRUE)
 ```
 
 ```{r random.effect.field.too, cache=TRUE, cache.extra=key}
-#routf.mom <- reaster(resp ~ fit + varb,
-#list(parental=~0 + modmat.dam, block = ~ 0 + fit:block),
-#pred, fam, varb, id, root, data = redataf)
+routf.mom <- reaster(resp ~ fit + varb,
+list(parental=~0 + modmat.dam, block = ~ 0 + fit:block),
+pred, fam, varb, id, root, data = redataf)
 routf.granddad <- reaster(resp ~ fit + varb,
     list(parental=~0 + modmat.grandfather, block = ~ 0 + fit:block),
     pred, fam, varb, id, root, data = redataf)
 dim(modmat.grandfather)
-dim(fit:block)
 dim(redataf)
 ```
+In the following, we check to make sure that the families represented in the pedigreed generation ('greenhouse') include all the families (i.e. sires
+in the original crosses) in the offspring generation.
 
 ```{r debug.bf}
 my.bf <- with(routf.granddad, b[grep("grandfather", names(b))])
-all.equal(my.b, my.bf, check.attributes = FALSE)
+all.equal(names(my.b), names(my.bf), check.attributes = FALSE)
+head(names(my.b))
+head(names(my.bf))
+idx.b <- sub("^.*paternalID", "", names(my.b))
+idx.bf <- sub("^.*grandfather", "", names(my.bf))
+head(idx.b)
+head(idx.bf)
+setequal(idx.b, idx.bf)
 ```
-And show the results.
+Now we show the results for the offspring cohort.
+
 ```{r random.effect.field.show, cache=TRUE, dependson="random.effect.field.too"}
 summary(routf.mom)
 summary(routf.granddad)
@@ -465,6 +486,14 @@ random effect merely to simplify interpretation: otherwise we would have differe
 estimates for each block. The use of the correction for subsampling does not
 depend on the decision of whether to treat blocks as fixed or random.
 
+Except for this fit, the variance of block effects is estimated to be zero,
+which means all of the block effects are equal, and they have mean zero by
+the model assumptions, so all block effects are estimated to be zero in
+this fit.  So *for this fit only* we are using the fitted block effects
+(zero) for all blocks.  Of course, as everywhere else in statistics, estimates
+are not the parameters they estimate.  So all block effects estimated to be
+zero is not the same as all true unknown block effects equal to zero.
+
 **Caution:** this function does not handle the case where more than one node
 of the graph contributes to `fit` nor does it check.  It assumes we have
 a linear graph, which we do.
@@ -472,8 +501,8 @@ a linear graph, which we do.
 identical(pred, seq(along = pred) - 1)
 ```
 If we did not have a linear graph, then correction for subsampling would
-be much more complicated
-([appendix on that below](#appendix-mean-values-corrected-for-subsampling)).
+be much more complicated.  There is an appendix about this in the
+supplementary material for @zenodo.
 
 Invoke the function to construct an R function `map` that maps from
 canonical to mean value parameter values for these data.
@@ -487,6 +516,7 @@ mapv <- Vectorize(map)
 Also for the field cohort analysis: Invoke the function to construct an R function `mapf` that maps from
 canonical to mean value parameter values for these data.
 Also vectorize this function, which is useful in certain contexts.
+(Notice how having a map factory comes in handy here.)
 
 ```{r mapfv, cache=TRUE}
 mapf <- map.factory(routf.granddad, vars == "total.pods.collected")
@@ -524,15 +554,36 @@ all GLMM and aster models with random effects.
 # Breeding Value Estimates
 
 R function `reaster` provides estimates of the "breeding values"
-(in scare quotes) on the
+(in scare quotes, because these are not the "breeding values" of conventional
+quantitative genetics) on the
 canonical parameter scale.  Of course, these are not precisely estimates,
 because breeding values are random effects rather than unknown parameters.
-So they are more analogous to BLUPS (best linear unbiased predictors) of breeding values in conventional
+So they are more analogous to BLUPS (best linear unbiased predictors)
+of breeding values in conventional
 quantitative genetics.  Except they are not really that either due to the
 nonlinearity of the mapping from canonical to mean values shown above.
-If we replace BLUP by best median unbiased, then maybe we have some sort
-of analogy (because medians map to medians going through any monotone
-transformation).
+
+The document `mf.pdf` referred to above says they are BLUP with the B, L,
+and U.  Only the P remains because anything we use as a prediction is a
+prediction.  But it also what they actually are.  BLUP are conditional
+expectations of breeding values for a quantitative trait (here fitness)
+given observed values.  But conventional quantititative genetics assumes
+observed trait values and breeding values are jointly multivariate normal,
+hence the conditional distribution of breeding values given observed trait
+values is also multivariate normal, hence linear in the observed trait values
+(that is the L in BLUP), symmetric about the mean (as any normal distribution
+is), hence unbiased (that is the U in BLUP).  But the symmetry and unimodality
+of normal
+distributions means that mean, median, and mode are the same (all equal to
+the center of symmetry).
+So we can think of BLUP as conditional means, conditional medians,
+or conditional modes.  Means do not go through nonlinear transformations,
+but medians and modes do go through monotone nonlinear transformations,
+which mappings from canonical parameter scale to mean value parameter scale
+in exponential family models (including aster models) are.
+So we can say what we are doing are CMP for
+conditional median (or mode) predictors.  And these generalize BLUP because
+BLUP are also CMP.
 
 Regardless, we map these quantities to the mean value parameter scale.
 We do this just for breeding values of sires (in 'greenhouse' cohort). 
@@ -557,17 +608,21 @@ length(bf)
 
 Fix up names so not so verbose.
 ```{r fixnames}
-names(b) <- sub("modmat.siredamfit:", "", names(b))
+names(b) <- sub("modmat.siredamfit:paternalID", "", names(b))
 ```
 ```{r fixnamesf}
-names(bf) <- sub("modmat.grandfather:", "", names(bf))
+names(bf) <- sub("modmat.grandfatherfit:grandfather", "", names(bf))
 ```
 
 ```{r debug}
-all.equal(b, bf, check.attributes = FALSE)
+all.equal(b, bf)
 all.equal(my.b, b, check.attributes = FALSE)
 all.equal(my.bf, bf, check.attributes = FALSE)
 ```
+**Query from Charlie.**
+Not sure what is going on here.  Are `b` and `bf` even supposed to be equal?
+If not, why are we checking?  Is this just something that should be commented
+out?
 
 # Obtain realized genetically based change in mean fitness within parental generation
 We now compute the expressions in mf2 to partition the change in mean fitness between generations
@@ -576,12 +631,18 @@ mean fitness of the parental ('greenhouse') generation in the envt in which sele
 
 ```{r genprevdeltaW, cache=TRUE}
 mu <- mapv(b)
+length(mu)
 
 popmeanbefore <- mean(mu)
 
 popmeanbefore
 
 q <- mu/sum(mu)
+if(myyear == 2016) q16 <-q
+length(q)
+
+f_Specific_effects <- cbind(mu, q)
+f_Specific_effects
 
 sum(q*mu)
 freqchange <- q - 1/length(b)
@@ -595,10 +656,27 @@ genprevWchange
 
 ```{r deltaWtotal, cache=TRUE}
 muf <- mapfv(bf)
-offspringmeanW <- sum(q*muf)
+length(muf)
+length(q)
+
+origgranddads <- sub("^.*ID","", names(my.b))
+origgranddads
+fgranddads <- sub("^.*grandfather","", names(bf))
+fgranddads
+
+idx <- match(fgranddads,origgranddads)
+idx
+any(!is.na(idx))
+
+idx
+
+q[idx]
+muf
+
+offspringmeanW <- sum(q[idx]*muf)
 offspringmeanW 
 
-totalWchange <- sum(q*muf) - popmeanbefore
+totalWchange <- offspringmeanW - popmeanbefore
 totalWchange
 ```
 
@@ -615,15 +693,20 @@ save.offspring <- list()
 Then save the fit we have.
 ```{r fit.save.one, cache=TRUE, dependson="random.effect.too"}
 site.name <- substr(mydata, 1, 2)
+site.name
 fit.name <- paste0(site.name, myyear)
 fit.name
 save.rout[[fit.name]] <- rout
+```
+
+```{r fit.save.more, cache=TRUE, dependson="random.effect.too"}
 save.pedigreedmean[[fit.name]] <- popmeanbefore
 ```
 
 Also for offspring
 ```{r offspringmeanW.save, cache=TRUE, dependson="random.effect.field.too"}
 site.name <- substr(mydata, 1, 2)
+site.name
 fit.name <- paste0(site.name, myyearf)
 fit.name
 save.routf[[fit.name]] <- routf.granddad
@@ -646,17 +729,19 @@ for (myyear in 2016:2017) {
 <<sire.breeding>>
 <<genprevdeltaW>>
 <<fit.save.one>>
+<<fit.save.more>>
 print(popmeanbefore)
 print(genprevWchange)
 }
 ```
 
-Also must do the computations for the second offspring generation (named G2YR3 in thedataset, grown in 2017). 
+Also must do the computations for the second offspring generation (grown in 2017). 
 Unfortunately, the dataset is structured a bit differently, 
 and the code below addresses this.
 
 ```{r fit.2ndoffspring.cohort, cache=TRUE, cache.extra=key,error=TRUE}
 myyearf <- 2017
+q <- q16
 <<dataf.too>>
 subdatfield$grandfather <- subdatfield$paternalID
 <<data.too.too>>
@@ -678,17 +763,17 @@ What have we got?
 names(save.rout)
 
 
-names(save.rout$GC2015)
-names(save.rout$GC2016)
-names(save.rout$GC2017)
+names(save.rout$KW2015)
+names(save.rout$KW2016)
+names(save.rout$KW2017)
 
-print(save.pedigreedmean$GC2015)
-print(save.pedigreedmean$GC2016)
-print(save.pedigreedmean$GC2017)
+print(save.pedigreedmean$KW2015)
+print(save.pedigreedmean$KW2016)
+print(save.pedigreedmean$KW2017)
 
-print(save.offspring$GC2016)
-print(save.offspring$GC2017)
+print(save.offspring$KW2016)
+print(save.offspring$KW2017)
 ```
 
-Obtain the change in mean fitness due solely to different environments in the two years.
-last bullet point in mf2 (p.3).
+# References
+
