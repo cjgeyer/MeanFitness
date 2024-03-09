@@ -76,7 +76,7 @@ previous year (their own sire unknown because of open pollination).
 For short, we will say these
 individuals are from the same ``family'' as their dam in the previous year.
 
-\subsection{Change in Mean Fitness}
+\subsection{Change in Mean Fitness} \label{sec:change}
 
 If
 \begin{itemize}
@@ -98,9 +98,9 @@ We also need to know the (estimated) population frequency
    \hat{q}_i = \frac{p_i \hat{\mu}_i}{\sum_j p_j \hat{\mu}_j}
 \end{equation*}
 where the sum in the denominator runs over all families.
-(This is standard in quantitative genetics, \citet{lande-arnold},
+(This is standard in quantitative genetics --- \citet{lande-arnold},
 breeder's equation,
-and so forth, but does not account for recombination and other effects
+and so forth --- but does not account for recombination and other effects
 \citep{pr70,pr72}.)
 
 Now we need to consider three subexperiments
@@ -123,7 +123,7 @@ The total change in mean fitness in from one generation to (the same point in) t
    \bigr)
 \end{equation}
 
-\subsection{Decomposition of Change in Mean Fitness}
+\subsection{Decomposition of Change in Mean Fitness} \label{sec:decompose}
 
 We now decompose \eqref{eq:total-change} into a sum of three terms,
 each of which has a biological interpretation.
@@ -178,9 +178,9 @@ others have biological interpretations.
 We intend to estimate, discuss, and interpret each of these three differences
 separately.  We also need to derive standard errors for each.
 
-\section{Standard Errors}
+\section{Theory}
 
-\subsection{Introduction}
+\subsection{Aster Models with Random Effects}
 
 In aster models with random effects \citep*{reaster} we have fixed effects
 and random effects.  Fixed effects are unknown parameters to estimate.
@@ -192,10 +192,12 @@ R function \code{reaster} in R package \code{aster} \citep{aster-package}
 provides standard errors for the estimated parameters (fixed effects and
 variance components) and, more generally, provides (an approximation to)
 the Fisher information matrix for these parameters.  The latter is
-undocumented although is used in published examples
+undocumented although used in published examples
 \citep[Supplementary material Section~12.3.1]{zenodo}.  And the inverse
 of this matrix is (by the ``usual'' asymptotics of maximum likelihood)
 the variance-covariance matrix of the parameter estimates.
+
+\subsection{Estimates of Random Effects}
 
 R function \code{reaster} also provides ``estimates'' (in scare quotes)
 of random effects.  Of course, random effects are not constants to estimate,
@@ -260,25 +262,27 @@ rather than maximize), where
 The notation $D^{-1}$ assumes the matrix $D$ is invertible, which it is
 if none of the variance components are zero (the case of zero variance
 components is handled by R function \code{reaster} and is discussed
-by \citet{reaster} but we ignore that here; if the genetic variance
+by \citet[Section~3]{reaster} but we ignore that here; if the genetic variance
 were estimated to be zero, then the $\hat{b}$ would be zero for
 all individuals, and we would have no estimated change in mean fitness).
 
 Considered as a function of $b$ for fixed $\alpha$, $\nu$, and $y$,
 \eqref{eq:logl-complete} is minus the log unnormalized probability density
 function of the
-conditional distribution of $b$ given $y$.  As argued by \citet{reaster},
+conditional distribution of $b$ given $y$.  As argued
+by \citet[Section~2]{reaster},
 for fixed $\alpha$, $\nu$, and $y$, \eqref{eq:logl-complete} has a unique
 minimizer (minimizing over $b$), which we denote $b^*(\alpha, \nu, y)$.
 Since this maximizes the conditional probability density, this is the
 \emph{mode} of the conditional distribution of $b$ given $y$.
 When we plug in approximate maximum likelihood estimates for the unknown
 parameters we obtain
-\begin{equation*}
+\begin{equation} \label{eq:b-hat}
    \hat{b} = b^*(\hat{\alpha}, \hat{\nu}, y)
-\end{equation*}
+\end{equation}
 which are the $b$ returned by R function \code{reaster} and which are thus
-\emph{estimates} of the conditional distribution of random effects given
+\emph{estimates} of a feature (the mode) of the conditional distribution
+of random effects given
 observed data.  (BLUP have the same issue.  The term BLUP only describes
 what would be obtained if the true unknown parameter values were used in
 the calculation.  If estimates are used instead, then sometimes the
@@ -294,62 +298,91 @@ conditional distributions of multivariate normal are again multivariate normal)
 are symmetric and unimodal so the mean, median, and mode are the same.
 Thus, when thought about the right way, CMP are generalizations of BLUP.
 
-One tricky thing about CMP: we are not thinking of $y$ as a random variable
-but rather as an ordinary variable (as in mathematics outside of probability
-theory).  A conditional mode (or a conditional \emph{anything}) is a function
-of the conditioning variable.
-So we can think of $b^*(\hat{\alpha}, \hat{\nu}, \fatdot)$ as a function
-(of its third argument).  R function \code{reaster} returns the value
-of this function for the observed data, but we could, in principle, evaluate
-this function for any data.  So the error in our ECMP is not in $y$, it is
-in $\hat{\alpha}$ and $\hat{\nu}$ not being equal to (the true unknown)
-$\alpha$ and $\nu$.
+In aster models with random effects, the conditional distribution of random
+effects given observed data is not multivariate normal nor even symmetric.
+Hence CMP are not medians or means.  We can only call them conditional modes.
 
-Standard errors for any function of parameters are given by the multivariable
-delta method.  To apply the delta method to $b^*$ we need derivatives
-with respect to its first two arguments.
+\subsection{Estimates of Random Effects Nonlinearly Mapped}
 
-These derivatives are given in the technical report \citep{tr692} that
-is the supplementary material for the paper \citet{reaster}.  Equations
-(16) and (17) in that technical report are
+For estimates of population mean fitness we are not interested in the
+estimates \eqref{eq:b-hat} because they are on the wrong scale.  Fitness
+is expected lifetime number of offspring, which is measured on the
+unconditional mean value parameter scale whereas \eqref{eq:b-hat} are
+on the unconditional canonical parameter scale.  The mapping from one
+scale to the other can be calculated by the computer so the random effects
+estimates \eqref{eq:b-hat} can be mapped to the mean value scale.
+But the mapping is nonlinear, and nonlinear mappings need not preserve
+modes of distributions.
+
+So we can no longer call these modes.
+They are modes on the canonical parameter scale but not on the mean value
+scale.
+Perhaps we can call them mapped conditional mode predictors (MCMP).
+
+As a possible alternative, we could try to find the mode of the conditional
+distribution of random effects mapped to the mean value parameter scale.
+
+\subsection{Two Ways of Thinking}
+
+There are two ways of thinking about these estimates (whether on the
+canonical or mean value scale).
+
+We can think of them as properties
+of the conditional distribution, and hence functions of the data.
+This is what the notation above suggests: $b^*(\alpha, \nu, y)$ when
+thought of as a function of $y$ is the mode of the conditional distribution
+of the vector $b$ of random effects given the vector $y$ of observed data.
+And \eqref{eq:b-hat} is what we get when we plug in parameter estimates
+for the true unknown parameters.  In this interpretation $y$ is an ordinary
+vector variable (like in mathematics outside of probability theory).
+
+Or we can think of them as just more things to estimate.  This does not
+make a lot of sense of what these quantities actually are, but does reflect
+the actual estimation process described by \citet{reaster}.
+In this interpretation $y$ is a random vector having the true unknown
+distribution of the data.
+
+Here we use the latter interpretation.
+
+\subsection{Estimation and Standard Errors}
+
+Following \citet{reaster} in the text surrounding their equation (7),
+the vector $(\hat{\alpha}, \hat{b}, \hat{\nu})$ is the joint minimizer
+of the function $p$ given by their equation (7) where $\widehat{W}$ is
+considered fixed and known at some points of the argument and variable
+(to be estimated) in other parts.  This is an approximation
+\citet{reaster} attribute to \citet{breslow-clayton}.
+For the purposes of calculating standard errors we will consider
+$\widehat{W}$ as fixed (as does R function \code{reaster} in R package
+\code{aster} \citep{aster-package}).
+
+The general theory of $M$-estimation \citep[Section~5.3]{vdv} says
+that the asymptotic variance of these estimators has the ``sandwich''
+form $U^{-1} V (U^{-1})^T$, where
 \begin{subequations}
 \begin{align}
-   b^*_\alpha(\alpha, \nu)
-   & =
-   -
-   p_{b b}(\alpha, b^*, \nu)^{-1} p_{b \alpha}(\alpha, b^*, \nu)
-   \label{eq:b-star-alpha}
+   U & = E_{\alpha, b, \nu} \bigl\{ \nabla^2 p(\alpha, b, \nu)) \bigr\}
+   \label{eq:u}
    \\
-   b^*_{\nu}(\alpha, \nu)
-   & =
-   -
-   p_{b b}(\alpha, b^*, \nu)^{-1} p_{b \nu}(\alpha, b^*, \nu)
-   \label{eq:b-star-nu}
+   V & = \var_{\alpha, b, \nu} \bigl\{ \nabla p(\alpha, b, \nu)) \bigr\}
+   \label{eq:v}
 \end{align}
 \end{subequations}
-where \citet{tr692} drop the dependence of $b^*$ on $y$ from their
-notation and $p$
-can be taken to be
-\begin{equation} \label{eq:pee}
-   p(\alpha, b, \nu) =
-   - l(a + M \alpha + Z b) + \tfrac{1}{2} b^T D^{-1} b
-\end{equation}
-(the terms of \eqref{eq:logl-complete} that depend on $b$; this is not
-what \citet{tr692} take $p$ to be, but their definition agrees with ours
-in the terms that depend on $b$). 
-In \eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu} subscripts
-denote partial derivatives: $b^*_\alpha(\alpha, \nu)$ is a vector
-whose components are $\partial b^*(\alpha, \nu) / \partial \alpha_i$
-and similarly for derivatives with respect to components of $\nu$.
-
-The second derivatives that appear on the right-hand side of
-\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu} are given
-in Section~1.8 of \citet{tr692} and repeated here
-\begin{equation} \label{eq:second-pee}
-\begin{split}
-   p_{b \alpha}(\alpha, b, \nu)
+In these equations $\nabla^2$ denotes the square matrix of second partial
+derivatives with respect to all three vectors. These second derivatives
+are given by
+\begin{align*}
+   p_{\alpha \alpha}(\alpha, b, \nu)
+   & =
+   M^T W(a + M \alpha + Z b) M
+   \\
+   p_{\alpha b}(\alpha, b, \nu)
    & =
    M^T W(a + M \alpha + Z b) Z
+   \\
+   p_{\alpha \nu_k}(\alpha, b, \nu)
+   & =
+   0
    \\
    p_{b b}(\alpha, b, \nu)
    & =
@@ -358,42 +391,171 @@ in Section~1.8 of \citet{tr692} and repeated here
    p_{b \nu_k}(\alpha, b, \nu)
    & =
    - D^{- 1} E_k D^{- 1} b
-\end{split}
-\end{equation}
-where
-\begin{equation*}
-   E_k = D_{\nu_k}(\nu)
-\end{equation*}
-is the diagonal matrix whose components are equal to one
-if the corresponding components of $D$ are equal to $\nu_k$ by
-definition (rather than by accident when some other component of $\nu$
-also has the same value) and whose components are otherwise zero
-and $p_{b \alpha}(\alpha, b, \nu)$ is the matrix whose $i, j$ component is
-$\partial^2 p_{b \alpha}(\alpha, b, \nu) / \partial b_i \partial \alpha_j$.
+   \\
+   p_{\nu_j \nu_k}(\alpha, b, \nu)
+   & =
+   b^T D^{- 1} E_j D^{- 1} E_k D^{- 1} b
+   \\
+   & \qquad
+   -
+   \tfrac{1}{2} \tr \Bigl(
+   \bigl[ Z^T \widehat{W} Z D + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_j
+   \\
+   & \qquad \qquad
+   \bigl[ Z^T \widehat{W} Z D + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_k
+   \Bigr)
+\end{align*}
+\citep[unnumbered displayed equation at the end of Section~2]{reaster}.
+These first derivatives are not given in the paper, but are given in
+the backing technical report \citep[Section~1.7]{tr692}.
+\begin{align*}
+   p_\alpha(\alpha, b, \nu)
+   & =
+   - M^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr]
+   \\
+   p_b(\alpha, b, \nu)
+   & =
+   - Z^T \bigl[ y - \mu(a + M \alpha + Z b) \bigr] + D^{- 1} b
+   \\
+   p_{\nu_k}(\alpha, b, \nu)
+   & =
+   - \tfrac{1}{2} b^T D^{- 1} E_k D^{- 1} b
+   + \tfrac{1}{2} \tr \Bigl(
+   \bigl[ Z^T \widehat{W} Z D + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_k
+   \Bigr)
+\end{align*}
 
-So now we need to know whether there is a function in R package \code{aster}
-that calculates these derivatives
-\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}.  Unfortunately,
-the answer to that seems to be no.
-R function \code{quickle} does calculate the second derivatives
-\eqref{eq:second-pee} but uses them to calculate something else
-(so it does not return either \eqref{eq:second-pee} or
-\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}, hence we can
-copy some of the code of that function in our own function to calculate
-\eqref{eq:b-star-alpha} and \eqref{eq:b-star-nu}).
+In these equations we are thinking of $b$ as a parameter we estimate
+rather than as a random effect.  The motivation for the choice of the
+function $p$ defined by equation (7) in \citet{reaster} is the random
+effects story, but the actual estimation procedure is an $M$-estimation.
+Thus we treat only $y$ as random in the equations in this section.
+
+Since the second derivatives do not involve $y$, we consider them nonrandom,
+hence their own expectations.  Thus we use the second derivatives as is,
+except for putting hats on things.
+\begin{align*}
+   \widehat{U}_{\alpha \alpha}
+   & =
+   M^T \widehat{W} M
+   \\
+   \widehat{U}_{\alpha b}
+   & =
+   M^T \widehat{W} Z
+   \\
+   \widehat{U}_{\alpha \nu_k}
+   & =
+   0
+   \\
+   \widehat{U}_{b b}
+   & =
+   Z^T \widehat{W} Z + \widehat{D}^{- 1}
+   \\
+   \widehat{U}_{b \nu_k}
+   & =
+   - \widehat{D}^{- 1} E_k \widehat{D}^{- 1} \hat{b}
+   \\
+   \widehat{U}_{\nu_j \nu_k}
+   & =
+   \hat{b}^T \widehat{D}^{- 1} E_j \widehat{D}^{- 1} E_k \widehat{D}^{- 1} \hat{b}
+   \\
+   & \qquad
+   -
+   \tfrac{1}{2} \tr \Bigl(
+   \bigl[ Z^T \widehat{W} Z \widehat{D} + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_j
+   % \\
+   % & \qquad \qquad
+   \bigl[ Z^T \widehat{W} Z \widehat{D} + I \bigr]^{- 1}
+   Z^T \widehat{W} Z E_k
+   \Bigr)
+\end{align*}
+Since the first derivatives are linear in $y$, their variances and covariances
+are linear in $\var(y)$
+\begin{align*}
+   \widehat{V}_{\alpha \alpha}
+   & =
+   M^T \var_{\hat{\alpha}, \hat{b}, \hat{\nu}}(y) M
+   \\
+   \widehat{V}_{\alpha b}
+   & =
+   M^T \var_{\hat{\alpha}, \hat{b}, \hat{\nu}}(y) Z
+   \\
+   \widehat{V}_{\alpha \nu_k}
+   & =
+   0
+   \\
+   \widehat{V}_{b b}
+   & =
+   Z^T \var_{\hat{\alpha}, \hat{b}, \hat{\nu}}(y) Z
+   \\
+   \widehat{V}_{b \nu_k}
+   & =
+   0
+   \\
+   \widehat{V}_{\nu_j \nu_k}
+   & =
+   0
+\end{align*}
+
+We end this section where we began, with an apology for treating
+$\widehat{W}$ as a known constant matrix in some parts of the argument,
+in particular in deriving our equations for $\widehat{U}$ and $\widehat{V}$,
+and as a function of $\alpha$ and $b$ in other parts of the argument
+(and in the actual estimation done by R function \code{reaster}).
+
+We have $\widehat{U}_{\alpha, \nu} = \widehat{V}_{\alpha, \nu} = 0$
+because no term in equation (7) of \citet{reaster} contains both $\alpha$
+and $\nu$ so mixed partial derivatives are zero.
+
+But the argument why $\widehat{V}_{b \nu}$ and $\widehat{V}_{\nu \nu}$
+are zero matrices involves two issues.
+\begin{itemize}
+\item In this section of this document, we are treating only $y$ (not $b$)
+    as random, which is unlike what \citet{reaster} do.  They only use
+    $\hat{b}$ in the process of deriving the approximated integrated
+    likelihood from which $b$ has been eliminated.  Consequently, they
+    do not consider $\hat{b}$ an estimator of anything so it has no
+    standard errors.  Here we want to consider $\hat{b}$ an estimator
+    (of something) and we need standard errors for it.  Hence the
+    procedure here.
+\item Because we are treating on $y$ as random, this makes
+   $p_{\nu_k}(\alpha, b, \nu)$, which does not contain $y$, nonrandom.
+   Hence it has variance zero, and covariance with any other random vector
+   zero.
+\end{itemize}
+
+Thus the procedure proposed here, while different from that proposed
+by \citet{reaster} does make sense in the current context.
+
+\subsection{The Delta Method}
+
+Now that we have
+an estimate $\widehat{U}^{-1} \widehat{V} (\widehat{U}^{-1})^T$
+of the sampling variance (matrix) of
+the vector $(\hat{\alpha}, \hat{b}, \hat{\nu})$, we need to turn this
+into an estimator of the variance (matrix) of the vector $\hat{\mu}$ of
+fitnesses of individuals.  These can then be put through the equations
+in Section~\ref{sec:decompose} to obtain the joint variance matrix of
+the estimators of our decomposition of mean fitness proposed in that section.
+
+
 
 \begin{thebibliography}{}
 
-% \bibitem[Breslow and Clayton(1993)]{breslow-clayton}
-% Breslow, N.~E., and Clayton, D.~G. (1993).
-% \newblock Approximate inference in generalized linear mixed models.
-% \newblock \emph{Journal of the American Statistical Association},
-%     \textbf{88}, 9--25.
-% \newblock \doi{10.1080/01621459.1993.10594284}.
+\bibitem[Breslow and Clayton(1993)]{breslow-clayton}
+Breslow, N.~E., and Clayton, D.~G. (1993).
+\newblock Approximate inference in generalized linear mixed models.
+\newblock \emph{Journal of the American Statistical Association},
+    \textbf{88}, 9--25.
+\newblock \doi{10.1080/01621459.1993.10594284}.
 
-\bibitem[Geyer(2021)]{aster-package}
-Geyer, C.~J. (2021).
-\newblock R package \texttt{aster}: Aster Models, version 1.1-2.
+\bibitem[Geyer(2023)]{aster-package}
+Geyer, C.~J. (2023).
+\newblock R package \texttt{aster}: Aster Models, version 1.1-3.
 \newblock \url{https://cran.r-project.org/package=aster}.
 
 \bibitem[Geyer, et al.(2022)Geyer, Kulbaba, Sheth, Pain, Eckhart,
@@ -446,10 +608,10 @@ Price, G.~R. (1972).
 \newblock Extension of covariance selection mathematics.
 \newblock \emph{Annals of Human Genetics}, \textbf{35}, 485--490.
 
-% \bibitem[van der Vaart(1998)]{vdv}
-% van der Vaart, A.~W. (1998).
-% \newblock \emph{Asymptotic Statistics}.
-% \newblock Cambridge University Press.
+\bibitem[van der Vaart(1998)]{vdv}
+van der Vaart, A.~W. (1998).
+\newblock \emph{Asymptotic Statistics}.
+\newblock Cambridge University Press.
 
 \end{thebibliography}
 
