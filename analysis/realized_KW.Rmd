@@ -76,6 +76,12 @@ library("aster")
 library("numDeriv")
 ```
 
+Need at least version 1.2 of R package `aster` for R generic function `vcov`
+to work on results of calls to R functions `aster` and `reaster`.
+```{r aster-version}
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2") >= 0)
+```
+
 # Data
 
 For the analyses in @kulbaba-et-al and @zenodo the data files are

@@ -533,6 +533,28 @@ by \citet{reaster} does make sense in the current context.
 
 \subsection{The Delta Method}
 
+\subsubsection{To Standard Deviations}
+
+First we have the case (not used in this document, but possibly used
+by other users of new R function \code{vcov.reaster} of square roots
+of variance components.  Here we have the transformation from
+$(\alpha, b, \nu)$ to $(\alpha, c, \sigma)$ where $c = b / \sigma$
+and $\sigma = \sqrt{\nu}$.  For the delta method we want the derivative
+of this map. which has Jacobian matrix given by
+\begin{alignat*}{2}
+   \frac{\partial c_i}{\partial b_i} & = \frac{1}{\sigma_i}
+   \\
+   \frac{\partial c_i}{\partial \nu_j} & = - \frac{b_i}{2 \sigma_j^3}
+   & \qquad & \var(b_i) = \nu_j
+   \\
+   \frac{\partial \sigma_j}{\partial \nu_j} & = \frac{1}{2 \sigma_j}
+\end{alignat*}
+all other derivatives being either zero or, in the case of derivatives
+of components of $\alpha$ with respect to themselves, one.
+
+
+\subsubsection{To Mean Values}
+
 Now that we have
 an estimate $\widehat{U}^{-1} \widehat{V} (\widehat{U}^{-1})^T$
 of the sampling variance (matrix) of
