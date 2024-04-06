@@ -22,24 +22,24 @@ link-citations: true
 ---
 
 # Abstract
-This work builds on @kulbaba-et-al and @zenodo to obtain estimates of the realized response to natural selection.
 
-@kulbaba-et-al and the correction to it [@zenodo]
+This work builds on @kulbaba-et-al and the correction to it [@zenodo]
+to obtain estimates of the realized response to natural selection.
+Those articles
 presented estimates of mean fitness and additive genetic variance for fitness
 we obtained for three populations of *Chamaecrista fasciculata*,
 each grown in its home location in three years via aster analyses of records of components of fitness for a pedigreed set of individuals.
 Here, we consider the realized change in mean fitness from one generation to the next, for comparison with the prediction from Fisher's
-Fundamental Theorem of Natural Selection.
+Fundamental Theorem of Natural Selection (FFTNS).
 As a guide, we have the document `mf.pdf` (in the same git repository as
-this document), which develops a partitioning of the
-overall change in mean fitness, showing a portion of the change that is due to change in genetic composition
-(i.e. representation of the paternal families) and a portion that is due to difference in environmental conditions between years.
-The genetic portion is then further partitioned into the part "due to natural
-selection", which is described by Fisher's fundamental theorem of natural selection, and the remainder.
+this document), which divides change in mean fitness into three parts:
+that due to change in genetic composition described by FFTNS,
+that due to change in genetic composition not described by FFTNS, and
+that due to change in environment.
 Here, we obtain estimates of a) mean fitness of the pedigreed parental populations before selection (previously presented in @kulbaba-et-al and the
 Correction); b) mean fitness of the pedigreed parental population after selection (i.e. accounting for the change in representation of the families
 reflected in differential seed production); and mean fitness of the offspring of the pedigreed sets
-(i.e. the outcome of natural selestion on the parental
+(i.e. the outcome of natural selection on the parental
 generation when grown in the same sites in the following year).
 
 We also obtain standard errors of our estimates.
@@ -82,6 +82,11 @@ to work on results of calls to R functions `aster` and `reaster`.
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2") >= 0)
 ```
 
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+knitr::opts_chunk$set(error=TRUE)
+```
+
 # Data
 
 For the analyses in @kulbaba-et-al and @zenodo the data files are
@@ -110,7 +115,7 @@ For this document the data files are
 KWdat.csv
 KW_2015_planting_data.csv
 ```
-The former is the same data used by @kulbaba-et-al and @zenodo
+The former is the same data used by @kulbaba-et-al and @zenodo,
 and the latter contains pedigree information we need to match up
 offspring with parents and grandparents.
 
@@ -177,10 +182,6 @@ myyearf <- myyear + 1
 Read in data.
 ```{r read}
 dat <- read.csv(mydata)
-#badname <- "G2YR2"
-#rename_cohort <- with(dat, cohort == badname)
-#head(rename_cohort)
-#dat[rename_cohort, "cohort"] <- "field"
 ```
 
 ## Remove Maternal ID Zero
@@ -188,9 +189,7 @@ dat <- read.csv(mydata)
 Parental ID Zero is "unknown" and hence should be removed
 from these analyses.
 ```{r remove}
-#zeros <- dat$paternalID == 0 | dat$maternalID == 0
-zeros <- dat$maternalID == 0
-dat <- dat[! zeros, ]
+dat <- subset(dat, maternalID != 0)
 ```
 
 ## Make Factor Variables
@@ -236,25 +235,31 @@ if (any(oopsie))
 ## Subset Data for pedigreed cohort
 
 Subset the data to get one part we want to analyze separately.
-Other parts are analyzed in the same way.
-Divide into year-specific files.
 ```{r data.too}
 subdat <- subset(dat, year == myyear & cohort == "greenhouse")
 with(subdat, length(unique(paternalID)))
 ```
+
+And another part we want to analyze in the same way.
+```{r data.too.next}
+subdatnext <- subset(dat, year == myyearf & cohort == "greenhouse")
+with(subdatnext, length(unique(paternalID)))
+```
+
 ## Remove Paternal ID Zero
 
 Parental ID Zero is "unknown" and hence should be removed
 from these analyses.
 ```{r remove2}
-zeros <- subdat$paternalID == 0 
-subdat <- subdat[! zeros, ]
+subdat <- subset(subdat, paternalID != 0)
+subdatnext <- subset(subdatnext, paternalID != 0)
 ```
 
 
 Show that we did the subset correctly.
 ```{r data.too.show}
 unique(subdat$year)
+unique(subdatnext$year)
 ```
 
 ## Subset Data for offspring cohort (field)
@@ -274,8 +279,10 @@ unique(subdatfield$year)
 Drop unused levels.
 ```{r data.too.too}
 subdat <- droplevels(subdat)
+subdatnext <- droplevels(subdatnext)
 subdatfield <- droplevels(subdatfield)
 ```
+
 ## Find Grandfathers
 
 Now we have to look up grandfathers of the offspring generation.
@@ -336,6 +343,8 @@ redata <- reshape(subdat, varying = list(vars), direction = "long",
     timevar = "varb", times = as.factor(vars), v.names = "resp")
 redataf <- reshape(subdatfield, varying = list(vars), direction = "long",
     timevar = "varb", times = as.factor(vars), v.names = "resp")
+redatanext <- reshape(subdatnext, varying = list(vars), direction = "long",
+    timevar = "varb", times = as.factor(vars), v.names = "resp")
 ```
 
 Add indicator variable `fit` to indicate "fitness" nodes (in these data
@@ -345,6 +354,9 @@ redata <- transform(redata,
     fit = as.numeric(grepl("totalseeds", as.character(varb))),
     root = 1)
 redataf <- transform(redataf,
+    fit = as.numeric(grepl("totalseeds", as.character(varb))),
+    root = 1)
+redatanext <- transform(redatanext,
     fit = as.numeric(grepl("totalseeds", as.character(varb))),
     root = 1)
 ```
@@ -366,6 +378,7 @@ modmat.siredam <- cbind(modmat.sire, modmat.dam)
 ```{r key.gc, echo=FALSE}
 key <- tools::md5sum(mydata)
 ```
+
 Then we can fit the model.
 ```{r random.effect.too, cache=TRUE, cache.extra=key}
 rout <- reaster(resp ~ fit + varb,
@@ -375,438 +388,60 @@ rout <- reaster(resp ~ fit + varb,
 And show the results.
 ```{r random.effect.show, cache=TRUE, dependson="random.effect.too"}
 summary(rout)
-with(rout, length(grep("paternal", names(b))))
 ```
 
-```{r debug.b}
-my.b <- with(rout, b[grep("paternal", names(b))])
+## Another Random Effect Aster Model
+
+```{r random.effect.next.modmat}
+modmat.sire.next <- model.matrix(~ 0 + fit:paternalID, redatanext)
+modmat.dam.next <- model.matrix(~ 0 + fit:maternalID, redatanext)
+modmat.siredam.next <- cbind(modmat.sire.next, modmat.dam.next)
+```
+
+```{r random.effect.next, cache=TRUE, cache.extra=key}
+rout.next <- reaster(resp ~ fit + varb,
+    list(parental=~0 + modmat.siredam.next, block = ~ 0 + fit:block),
+    pred, fam, varb, id, root, data = redatanext)
+```
+And show the results.
+```{r random.effect.show.next, cache=TRUE, dependson="random.effect.next"}
+summary(rout.next)
 ```
 
 ## Random Effect Aster Model for offspring generation ('field')
 
+### Grandfather Effects
+
 The offspring generation arose via open pollination of the pedigreed generation. 
-For this reason, we do not know paternity of individuals in this generation. We focus on 
-mean fitnesses for families descending from individual sires in the set of crosses that produced the pedigreed generation. 
+For this reason, we do not know paternity of individuals in this generation.
+We focus on
+mean fitnesses for families descending from individual sires in the set
+of crosses that produced the pedigreed generation.
+```{r random.effect.grandfather, cache=TRUE, cache.extra=key}
+routf.granddad <- reaster(resp ~ fit + varb,
+    list(parental = ~ 0 + fit:grandfather, block = ~ 0 + fit:block),
+    pred, fam, varb, id, root, data = redataf)
+```
+```{r random.effect.grandfather.summary}
+summary(routf.granddad)
+```
+
+### Maternal Effects
+
 For interest's sake, we also carry out random effects analysis 
 with maternal plant in the pedigreed generation as the random factor.
-
-
-```{r random.effect.field, cache=TRUE}
-#modmat.sire <- model.matrix(~ 0 + fit:paternalID, redata)
-modmat.dam <- model.matrix(~ 0 + fit:maternalID, redataf)
-modmat.grandfather <- model.matrix(~ 0 + fit:grandfather, redataf)
-#head(colnames(modmat.sire))
-#head(colnames(modmat.dam))
-head(colnames(modmat.grandfather))
-dim(modmat.grandfather)
-```
-
-```{r key.gcfield, echo=FALSE}
-key <- tools::md5sum(mydata)
-```
-Then we can fit the model.
-```{r checkerrors, eval=FALSE, echo=FALSE}
-# make (after this) all code chunks have option error=TRUE
-# currently turned off
-# change eval=FALSE to eval=TRUE (the default) to have this effect
-knitr::opts_chunk$set(error=TRUE)
-```
-
-```{r random.effect.field.too, cache=TRUE, cache.extra=key}
+We do not use this analysis in further analysis.  (Rather, we use
+the preceding one with grandsire effects.)
+```{r random.effect.dam, cache=TRUE, cache.extra=key}
 routf.mom <- reaster(resp ~ fit + varb,
-list(parental=~0 + modmat.dam, block = ~ 0 + fit:block),
-pred, fam, varb, id, root, data = redataf)
-routf.granddad <- reaster(resp ~ fit + varb,
-    list(parental=~0 + modmat.grandfather, block = ~ 0 + fit:block),
+    list(parental = ~ 0 + fit:maternalID, block = ~ 0 + fit:block),
     pred, fam, varb, id, root, data = redataf)
-dim(modmat.grandfather)
-dim(redataf)
 ```
-In the following, we check to make sure that the families represented in the pedigreed generation ('greenhouse') include all the families (i.e. sires
-in the original crosses) in the offspring generation.
-
-```{r debug.bf}
-my.bf <- with(routf.granddad, b[grep("grandfather", names(b))])
-all.equal(names(my.b), names(my.bf), check.attributes = FALSE)
-head(names(my.b))
-head(names(my.bf))
-idx.b <- sub("^.*paternalID", "", names(my.b))
-idx.bf <- sub("^.*grandfather", "", names(my.bf))
-head(idx.b)
-head(idx.bf)
-setequal(idx.b, idx.bf)
-```
-Now we show the results for the offspring cohort.
-
-```{r random.effect.field.show, cache=TRUE, dependson="random.effect.field.too"}
+```{r random.effect.dam.summary}
 summary(routf.mom)
-summary(routf.granddad)
-bf <- routf.granddad$b
-bf <- bf[grep("grandfather", names(bf))]
-length(bf)
 ```
 
-# Function to Map from Canonical to Mean Value Parameter
-
-As with generalized linear models, aster models are linear on
-a scale (the canonical parameter scale) that is a nonlinear transformation from the scale of biological measurement.
-To complete our analysis, we convert our estimates from the canonical parameter scale
-back to the measurement scale (the mean value parameter scale).
-We use the map factory concept (use a function to make another function).
-This provides many benefits over defining the function we want directly.
-It allows us to embed information in the function we make with the factory.
-It allows us to easily remake the function whenever we need it.
-And the latter is important, because the map from the canonical parameter
-scale to the mean value parameter scale depends on the data we have fit.
-In particular, and in contrast to standard linear models, estimates of
-variance components here depend on the fixed effects.
-```{r factory, cache=TRUE}
-map.factory <- function(rout, is.subsamp) {
-    stopifnot(inherits(rout, "reaster"))
-    stopifnot(is.logical(is.subsamp))
-    aout <- rout$obj
-    stopifnot(inherits(aout, "aster"))
-    nnode <- ncol(aout$x)
-    if(nnode != length(is.subsamp))
-        stop("length(is.subsamp) not the number of nodes in the aster graph")
-    alpha <- rout$alpha
-    ifit <- which(names(alpha) == "fit")
-    if (length(ifit) != 1)
-        stop("no fixed effect named fit")
-    # return map function
-    function (b) {
-        stopifnot(is.numeric(b))
-        stopifnot(is.finite(b))
-        stopifnot(length(b) == 1)
-        alpha[ifit] <- alpha[ifit] + b
-        xi <- predict(aout, newcoef = alpha,
-            model.type = "conditional", is.always.parameter = TRUE)
-        xi <- matrix(xi, ncol = nnode)
-        # always use drop = FALSE unless you are sure you don't want that
-        # here if we omit drop = FALSE and there is only one non-subsampling
-        # node, the code will break (apply will give an error)
-        xi <- xi[ , ! is.subsamp, drop = FALSE]
-        mu <- apply(xi, 1, prod)
-        # mu is unconditional mean values for model without subsampling
-        # in this application all components mu are the same because no
-        # covariates except varb, so just return only one
-        mu[1]
-    }
-}
-```
-Here R function `map.factory` when invoked returns a function that maps
-from a possible value of a parental effect on the canonical parameter scale
-(what the model has) to the corresponding value on the mean value parameter
-scale.  This depends on the model and the fixed effect parameters,
-which are taken from argument `rout`, and it corrects for subsampling,
-which is indicated by the argument `is.subsamp`.
-The specific line of code that corrects for subsampling is
-```
-xi <- xi[ , ! is.subsamp, drop = FALSE]
-```
-This makes the result a function of conditional means of non-subsampling
-arrows only.
-
-Note that we are ignoring blocks.  This is the same as setting the block
-effect to zero.  This is not the actual effect of any actual block. Rather, it
-is something like the population mean of the population of blocks. 
-Specifically, we are setting the block effect to be the mean of the
-distribution that the model says block effects have (mean zero normal).
-We acknowledge that the blocks are not a simple random sample
-of some population of blocks, but this is not necessary for a random
-effects model to be appropriate.  We are using a model with block as a
-random effect merely to simplify interpretation: otherwise we would have different
-estimates for each block. The use of the correction for subsampling does not
-depend on the decision of whether to treat blocks as fixed or random.
-
-Except for this fit, the variance of block effects is estimated to be zero,
-which means all of the block effects are equal, and they have mean zero by
-the model assumptions, so all block effects are estimated to be zero in
-this fit.  So *for this fit only* we are using the fitted block effects
-(zero) for all blocks.  Of course, as everywhere else in statistics, estimates
-are not the parameters they estimate.  So all block effects estimated to be
-zero is not the same as all true unknown block effects equal to zero.
-
-**Caution:** this function does not handle the case where more than one node
-of the graph contributes to `fit` nor does it check.  It assumes we have
-a linear graph, which we do.
-```{r check.linear}
-identical(pred, seq(along = pred) - 1)
-```
-If we did not have a linear graph, then correction for subsampling would
-be much more complicated.  There is an appendix about this in the
-supplementary material for @zenodo.
-
-Invoke the function to construct an R function `map` that maps from
-canonical to mean value parameter values for these data.
-Also vectorize this function, which is useful in certain contexts.
-```{r map, cache=TRUE}
-map <- map.factory(rout, vars == "total.pods.collected")
-
-mapv <- Vectorize(map)
-```
-
-Also for the field cohort analysis: Invoke the function to construct an R function `mapf` that maps from
-canonical to mean value parameter values for these data.
-Also vectorize this function, which is useful in certain contexts.
-(Notice how having a map factory comes in handy here.)
-
-```{r mapfv, cache=TRUE}
-mapf <- map.factory(routf.granddad, vars == "total.pods.collected")
-
-mapfv <- Vectorize(mapf)
-```
-
-<!--
-Apparently if there are any special characters in the label, the figure
-tag gets wrongly printed.  So use camelCase for labels of figure chunks.
--->
-Plot this function.
-
-
-```{r mapGraph,fig.align="center",fig.cap="Map from parental random effect on the canonical parameter scale to the mean value parameter scale."}
-sigma.hat <- rout$sigma["parental"]
-curve(mapv, from = -3 * sigma.hat, to = 3 * sigma.hat, log = "y")
-```
-Plot this function also for offspring cohort.
-```{r mapfGraph,fig.align="center",fig.cap="Map from parental random effect on the canonical parameter scale to the mean value parameter scale."}
-sigma.hat <- routf.granddad$sigma["parental"]
-curve(mapfv, from = -3 * sigma.hat, to = 3 * sigma.hat, log = "y")
-```
-
-We digress to note that this map indicates a very large range of fitness
-on the mean value parameter scale (Fig. \@ref(fig:mapGraph)). This may seem
-surprising, but it results from the nonlinearity of the relationship between
-the canonical parameter scale and the mean value parameter scale and 
-follows the conventional logic of generalized linear mixed models (GLMM)
-[@stiratelli-laird-ware] or aster models with random effects [@reaster].
-Admittedly, three standard deviations is a fairly extreme value for a normal
-random variable (happens with probability `r 2 * pnorm(-3)`).  Similar issues affect
-all GLMM and aster models with random effects.
-
-# Breeding Value Estimates
-
-R function `reaster` provides estimates of the "breeding values"
-(in scare quotes, because these are not the "breeding values" of conventional
-quantitative genetics) on the
-canonical parameter scale.  Of course, these are not precisely estimates,
-because breeding values are random effects rather than unknown parameters.
-So they are more analogous to BLUPS (best linear unbiased predictors)
-of breeding values in conventional
-quantitative genetics.  Except they are not really that either due to the
-nonlinearity of the mapping from canonical to mean values shown above.
-
-The document `mf.pdf` referred to above says they are BLUP with the B, L,
-and U.  Only the P remains because anything we use as a prediction is a
-prediction.  But it also what they actually are.  BLUP are conditional
-expectations of breeding values for a quantitative trait (here fitness)
-given observed values.  But conventional quantititative genetics assumes
-observed trait values and breeding values are jointly multivariate normal,
-hence the conditional distribution of breeding values given observed trait
-values is also multivariate normal, hence linear in the observed trait values
-(that is the L in BLUP), symmetric about the mean (as any normal distribution
-is), hence unbiased (that is the U in BLUP).  But the symmetry and unimodality
-of normal
-distributions means that mean, median, and mode are the same (all equal to
-the center of symmetry).
-So we can think of BLUP as conditional means, conditional medians,
-or conditional modes.  Means do not go through nonlinear transformations,
-but medians and modes do go through monotone nonlinear transformations,
-which mappings from canonical parameter scale to mean value parameter scale
-in exponential family models (including aster models) are.
-So we can say what we are doing are CMP for
-conditional median (or mode) predictors.  And these generalize BLUP because
-BLUP are also CMP.
-
-Regardless, we map these quantities to the mean value parameter scale.
-We do this just for breeding values of sires (in 'greenhouse' cohort). 
-These are same individuals called 'grandfathers' in the 'field' cohort. We also obtain the 
-random effect estimates for them, based on the field cohort.
-```{r sire.breeding}
-b <- rout$b
-head(names(b))
-idx <- grep("paternal", names(b))
-b <- b[idx]
-length(b)
-```
-
-```{r grandsire.effects}
-bf <- routf.granddad$b
-head(names(bf))
-idx <- grep("grandfather", names(bf))
-bf <- bf[idx]
-
-length(bf)
-```
-
-Fix up names so not so verbose.
-```{r fixnames}
-names(b) <- sub("modmat.siredamfit:paternalID", "", names(b))
-```
-```{r fixnamesf}
-names(bf) <- sub("modmat.grandfatherfit:grandfather", "", names(bf))
-```
-
-```{r debug}
-all.equal(b, bf)
-all.equal(my.b, b, check.attributes = FALSE)
-all.equal(my.bf, bf, check.attributes = FALSE)
-```
-**Query from Charlie.**
-Not sure what is going on here.  Are `b` and `bf` even supposed to be equal?
-If not, why are we checking?  Is this just something that should be commented
-out?
-
-# Obtain realized genetically based change in mean fitness within parental generation
-We now compute the expressions in mf2 to partition the change in mean fitness between generations
-into components of interest. There are 5 bulleted expressions. The first is the genetic change in
-mean fitness of the parental ('greenhouse') generation in the envt in which selection took place.
-
-```{r genprevdeltaW, cache=TRUE}
-mu <- mapv(b)
-length(mu)
-
-popmeanbefore <- mean(mu)
-
-popmeanbefore
-
-q <- mu/sum(mu)
-if(myyear == 2016) q16 <-q
-length(q)
-
-f_Specific_effects <- cbind(mu, q)
-f_Specific_effects
-
-sum(q*mu)
-freqchange <- q - 1/length(b)
-
-fammeanchange <- freqchange * mu
-
-genprevWchange <- sum(fammeanchange)
-genprevWchange
-
-```
-
-```{r deltaWtotal, cache=TRUE}
-muf <- mapfv(bf)
-length(muf)
-length(q)
-
-origgranddads <- sub("^.*ID","", names(my.b))
-origgranddads
-fgranddads <- sub("^.*grandfather","", names(bf))
-fgranddads
-
-idx <- match(fgranddads,origgranddads)
-idx
-any(!is.na(idx))
-
-idx
-
-q[idx]
-muf
-
-offspringmeanW <- sum(q[idx]*muf)
-offspringmeanW 
-
-totalWchange <- offspringmeanW - popmeanbefore
-totalWchange
-```
-
-# Fit Models for the other cohorts of the Same set of crosses
-
-The first thing we need to do is save our model fit so we do not clobber
-it with a new model fit.  First make an empty list.
-```{r fit.save.zero, cache=TRUE}
-save.rout <- list()
-save.pedigreedmean <- list()
-save.routf <- list()
-save.offspring <- list()
-```
-Then save the fit we have.
-```{r fit.save.one, cache=TRUE, dependson="random.effect.too"}
-site.name <- substr(mydata, 1, 2)
-site.name
-fit.name <- paste0(site.name, myyear)
-fit.name
-save.rout[[fit.name]] <- rout
-```
-
-```{r fit.save.more, cache=TRUE, dependson="random.effect.too"}
-save.pedigreedmean[[fit.name]] <- popmeanbefore
-```
-
-Also for offspring
-```{r offspringmeanW.save, cache=TRUE, dependson="random.effect.field.too"}
-site.name <- substr(mydata, 1, 2)
-site.name
-fit.name <- paste0(site.name, myyearf)
-fit.name
-save.routf[[fit.name]] <- routf.granddad
-save.offspring[[fit.name]] <- offspringmeanW
-```
-
-Now we need to put stuff done above in a loop.  In the chunk below, we reuse
-multiple code chunks above (this is not visible in the PDF output, you must
-look at the Rmd source file).
-```{r fit.some.more, cache=TRUE, cache.extra=key, error=TRUE}
-for (myyear in 2016:2017) {
-<<data.too>>
-<<data.too.too>>
-<<reshape>>
-<<fit>>
-<<random.effect>>
-<<random.effect.too>>
-<<factory>>
-<<map>>
-<<sire.breeding>>
-<<genprevdeltaW>>
-<<fit.save.one>>
-<<fit.save.more>>
-print(popmeanbefore)
-print(genprevWchange)
-}
-```
-
-Also must do the computations for the second offspring generation (grown in 2017). 
-Unfortunately, the dataset is structured a bit differently, 
-and the code below addresses this.
-
-```{r fit.2ndoffspring.cohort, cache=TRUE, cache.extra=key,error=TRUE}
-myyearf <- 2017
-q <- q16
-<<dataf.too>>
-subdatfield$grandfather <- subdatfield$paternalID
-<<data.too.too>>
-<<reshape>>
-<<fit>>
-<<random.effect.field>>
-<<random.effect.field.too>>
-<<factory>>
-<<mapf>>
-<<mapfv>>
-<<grandsire.effects>>
-<<deltaWtotal>>
-<<offspringmeanW.save>>
-print(offspringmeanW)
-```
-
-What have we got?
-```{r show.save.rout}
-names(save.rout)
-
-
-names(save.rout$KW2015)
-names(save.rout$KW2016)
-names(save.rout$KW2017)
-
-print(save.pedigreedmean$KW2015)
-print(save.pedigreedmean$KW2016)
-print(save.pedigreedmean$KW2017)
-
-print(save.offspring$KW2016)
-print(save.offspring$KW2017)
-```
+# Mapping Sire and Grandsire Effects to Mean Values
 
 # References
 
