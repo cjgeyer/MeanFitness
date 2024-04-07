@@ -31,8 +31,8 @@ we obtained for three populations of *Chamaecrista fasciculata*,
 each grown in its home location in three years via aster analyses of records of components of fitness for a pedigreed set of individuals.
 Here, we consider the realized change in mean fitness from one generation to the next, for comparison with the prediction from Fisher's
 Fundamental Theorem of Natural Selection (FFTNS).
-As a guide, we have the document `mf.pdf` (in the same git repository as
-this document), which divides change in mean fitness into three parts:
+We follow @mean-fitness,
+which divides change in mean fitness into three parts:
 that due to change in genetic composition described by FFTNS,
 that due to change in genetic composition not described by FFTNS, and
 that due to change in environment.
@@ -442,6 +442,72 @@ summary(routf.mom)
 ```
 
 # Mapping Sire and Grandsire Effects to Mean Values
+
+We follow Section 9 of @zenodo *mutatis mutandis*.  The main changes are
+
+ * here we will have a vectorizing function that simultaneously does
+   all expected fitness values for all individuals and
+
+ * here we will calculate derivatives (Jacobian matrix) as well as function
+   values.
+
+```{r map}
+map <- function(rout, is.subsamp, include.random) {
+    stopifnot(inherits(rout, "reaster"))
+    stopifnot(is.logical(is.subsamp))
+    stopifnot(is.logical(include.random))
+    aout <- rout$obj
+    stopifnot(inherits(aout, "aster"))
+    nnode <- ncol(aout$x)
+    if(nnode != length(is.subsamp))
+        stop("length(is.subsamp) not the number of nodes in the aster graph")
+    fixed <- rout$fixed
+    random <- rout$random
+    alpha <- rout$alpha
+    bee <- rout$b
+    if(length(bee) != length(include.random))
+        stop("length(include.random) not the number of random effects",
+            " in the aster model")
+    # fake object of class aster
+    fake.out <- aout
+    fake.beta <- c(alpha, bee[include.random])
+    modmat.random <- Reduce(cbind, random)
+    stopifnot(ncol(modmat.random) == length(bee))
+    modmat.random <- modmat.random[ , include.random, drop = FALSE] 
+    fake.modmat <- cbind(fixed, modmat.random)
+    # now have to deal with objects of class aster (as opposed to reaster)
+    # think model matrices are three-way arrays.
+    stopifnot(prod(dim(aout$modmat)[1:2]) == nrow(fake.modmat))
+    fake.modmat <- array(as.vector(fake.modmat),
+        dim = c(dim(aout$modmat)[1:2], ncol(fake.modmat)))
+    fake.out$modmat <- fake.modmat
+    fake.out$coefficients <- fake.beta
+    pout <- predict(fake.out, model.type = "conditional",
+        is.always.parameter = TRUE, gradient = TRUE)
+}
+
+
+
+#        xi <- predict(aout, newcoef = alpha,
+#            model.type = "conditional", is.always.parameter = TRUE)
+#        xi <- matrix(xi, ncol = nnode)
+#        # always use drop = FALSE unless you are sure you don't want that
+#        # here if we omit drop = FALSE and there is only one non-subsampling
+#        # node, the code will break (apply will give an error)
+#        xi <- xi[ , ! is.subsamp, drop = FALSE]
+#        mu <- apply(xi, 1, prod)
+#        # mu is unconditional mean values for model without subsampling
+#        # in this application all components mu are the same because no
+#        # covariates except varb, so just return only one
+#        mu[1]
+```
+
+Test.
+```{r map.test}
+foo <- map(rout, grepl("collected", vars), grepl("paternal", names(rout$b)))
+names(foo)
+```
+
 
 # References
 

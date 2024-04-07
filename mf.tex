@@ -202,7 +202,10 @@ the variance-covariance matrix of the parameter estimates.
 R function \code{reaster} also provides ``estimates'' (in scare quotes)
 of random effects.  Of course, random effects are not constants to estimate,
 so these are not like parameter estimates.  They estimate \emph{something}, but
-what?
+what?  (In Section~\ref{sec:m-estimation} below we change our tune and do
+consider random effects as unknown parameters to estimate, thus just like
+fixed effects except that we use regularization/shrinkage for random
+effects but not for fixed effects.)
 
 In classical quantitative genetics where all random variables in the model
 (response and random effects) are jointly multivariate normal, one has
@@ -345,6 +348,7 @@ distribution of the data.
 Here we use the latter interpretation.
 
 \subsection{Estimation and Standard Errors}
+\label{sec:m-estimation}
 
 Following \citet{reaster} in the text surrounding their equation (7),
 the vector $(\hat{\alpha}, \hat{b}, \hat{\nu})$ is the joint minimizer
@@ -531,6 +535,12 @@ are zero matrices involves two issues.
 Thus the procedure proposed here, while different from that proposed
 by \citet{reaster} does make sense in the current context.
 
+The approximate asymptotic variance-covariance matrix for the vector
+$(\hat{\alpha}, \hat{b}, \hat{\nu})$ discussed in this section is
+implemented in R function \code{vcov.reaster} in
+the current version (not yet on CRAN) of R package \code{aster}
+\citep{aster-package}.
+
 \subsection{The Delta Method}
 
 \subsubsection{To Standard Deviations}
@@ -564,7 +574,44 @@ fitnesses of individuals.  These can then be put through the equations
 in Section~\ref{sec:decompose} to obtain the joint variance matrix of
 the estimators of our decomposition of mean fitness proposed in that section.
 
+Now for a non-apology apology.  There is no good way to do this with the
+functions in the R package \code{aster}.  And there can be no good way
+(as far as we can see) to write a function that will do more than one
+particular application (and not be useful for anybody else).  Hence
+we will, of course, write such functions for our analysis (or, more
+precisely, function factories: functions that produce functions).
+But those will only serve as examples that other users will have to
+modify for the details of their situations.
 
+In our particular examples, we want mean values that are functions of
+fixed effects and sire (or corresponding grandsire) effects.  We ignore
+block effects and maternal effects (which some fitted models have and
+some do not).  One already sees that this is a very special situation
+that no widely useful R function could be designed for.  But there is
+even more complication.  Our example has subsampling
+(\citealp{aster-theory}, Chapter~3; \citealp{zenodo}, Sections~9 and~16),
+so mean values have to be corrected for the specific pattern of subsampling.
+
+R package \code{aster} has two functions, \code{predict.aster} (the method
+of R generic function \code{predict} that handles R objects of class
+\code{aster}) and \code{astertransform}.  Neither does exactly what we
+want here because neither works with objects of class \code{reaster}.
+(And if there were such a function, it still wouldn't do what is wanted
+here, but rather what was wanted for some earlier application.)
+And we are going to have to use R function \code{predict.aster} because
+only it returns gradients as well as values.
+
+Here, unlike the example in \citet[Section~9]{zenodo} we will have to
+fake an object of class \code{aster} that has the parameter vector we
+want (all the fixed effects but only some but not all of the random effects)
+and the corresponding model matrix (the \code{rbind} of the model matrix
+for fixed effects and the model matrix for the part of the random effects
+that we are including as parameters), and then all of the rest of the
+stuff that goes in an object of class \code{aster}, which we can copy
+from the \code{obj} component of the object of class \code{reaster} that
+is the model fit we are currently processing.  Then we can follow the
+example in \citet[Section~9]{zenodo} except that we perhaps want to
+get analytic gradients using the chain rule from multivariate calculus.
 
 \begin{thebibliography}{}
 
@@ -575,10 +622,17 @@ Breslow, N.~E., and Clayton, D.~G. (1993).
     \textbf{88}, 9--25.
 \newblock \doi{10.1080/01621459.1993.10594284}.
 
-\bibitem[Geyer(2023)]{aster-package}
-Geyer, C.~J. (2023).
-\newblock R package \texttt{aster}: Aster Models, version 1.1-3.
+\bibitem[Geyer(2024)]{aster-package}
+Geyer, C.~J. (2024).
+\newblock R package \texttt{aster}: Aster Models, version 1.2.
 \newblock \url{https://cran.r-project.org/package=aster}.
+
+\bibitem[Geyer(unpublished)]{aster-theory}
+Geyer, C.~J. (unpublished).
+\newblock \emph{Aster Theory}.
+\newblock \url{https://github.com/cjgeyer/AsterTheory}.
+\newblock There are no version numbers, so cite the specific git
+    commit by its SHA-1 checksum.
 
 \bibitem[Geyer, et al.(2022)Geyer, Kulbaba, Sheth, Pain, Eckhart,
     and Shaw]{zenodo}
