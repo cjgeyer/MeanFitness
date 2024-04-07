@@ -390,6 +390,12 @@ And show the results.
 summary(rout)
 ```
 
+Look at the first step towards standard errors.
+```{r random.effect.vcov, cache=TRUE, dependson="random.effect.too"}
+vout <- vcov(rout)
+range(eigen(vout, symmetric = TRUE, only.values = TRUE)$values)
+```
+
 ## Another Random Effect Aster Model
 
 ```{r random.effect.next.modmat}
