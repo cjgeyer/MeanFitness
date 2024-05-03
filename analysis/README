@@ -1,5 +1,13 @@
 say
 
+    make realized_GC.pdf
+
+or
+
+    make realized_KW.pdf
+
+to make pdf, since the former is first in the makefile, it is the default, so
+
     make
 
-to make the pdf
+(with no argument) does the former.

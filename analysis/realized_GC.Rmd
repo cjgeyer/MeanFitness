@@ -1,5 +1,5 @@
 ---
-title: "Estimates of Realized response to selection for @kulbaba-et-al"
+title: "Estimates of Realized Response to Selection for @kulbaba-et-al"
 author:
   - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
   - "Mason W. Kulbaba^[Department of Mathematics and Science, Our Lady of the Lake University, mkulbaba@ollusa.edu, https://orcid.org/0000-0003-0619-7089]"
@@ -27,12 +27,12 @@ This work builds on @kulbaba-et-al and the correction to it [@zenodo]
 to obtain estimates of the realized response to natural selection.
 Those articles
 presented estimates of mean fitness and additive genetic variance for fitness
-we obtained for three populations of *Chamaecrista fasciculata*,
+for three populations of *Chamaecrista fasciculata*,
 each grown in its home location in three years via aster analyses of records of components of fitness for a pedigreed set of individuals.
 Here, we consider the realized change in mean fitness from one generation to the next, for comparison with the prediction from Fisher's
 Fundamental Theorem of Natural Selection (FFTNS).
-We follow @mean-fitness,
-which divides change in mean fitness into three parts:
+In @mean-fitness change in mean fitness in one generation is divided
+into three parts:
 that due to change in genetic composition described by FFTNS,
 that due to change in genetic composition not described by FFTNS, and
 that due to change in environment.
@@ -66,10 +66,18 @@ CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
  * The version of the `numDeriv` package used to make this document is
    `r packageVersion("numDeriv")`.
 
+ * The version of the `digest` package used to make this document is
+   `r packageVersion("digest")`.
+
+ * The version of the `Matrix` package used to make this document is
+   `r packageVersion("Matrix")`.
+
 Attach packages.
 ```{r package}
 library("aster")
 library("numDeriv")
+library("digest")
+library("Matrix")
 ```
 
 Need at least version 1.2 of R package `aster` for R generic function `vcov`
@@ -80,12 +88,12 @@ stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2") >= 0)
 
 ```{r checkerrors, echo=FALSE}
 # make all code chunks after this one have option error=TRUE
-knitr::opts_chunk$set(error=TRUE)
+# knitr::opts_chunk$set(error=TRUE)
 ```
 
 # Data
 
-For the analyses in @kulbaba-et-al and @zenodo the data files are
+For the analyses here. the data files are
 ```
 GCdat.csv
 KWdat.csv
@@ -99,21 +107,15 @@ for
 
  * Conard Environmental Research Area (CERA),
 
-respectively.  For more details @kulbaba-et-al.
+respectively.  These files include the same data on the same individuals
+as in the data files used by @kulbaba-et-al and @zenodo but also include
+more individuals, who are offspring of those analyzed before.
+For more details, see @kulbaba-et-al.
 
-These data files were downloaded from the GitHub repository
-https://github.com/mason-kulbaba/adaptive-capacity which
-contains the code and data for the analysis of the original paper.
-So we are using the same data but doing a different analysis.
-
-For this document the data files are
+For this document the data file is
 ```
-KWdat.csv
-KW_2015_planting_data.csv
+GCdat.csv
 ```
-The former is the same data used by @kulbaba-et-al and @zenodo,
-and the latter contains pedigree information we need to match up
-offspring with parents and grandparents.
 
 # Introduction
 
@@ -164,7 +166,7 @@ We start by doing one example, but we do it in such a way that code
 can be reused for all analyses.  The following two variables determine
 (entirely) the analysis to be done.
 ```{r mydata.myyear}
-mydata <- "KWdat.csv"
+mydata <- "GCdat.csv"
 myyear <- 2015
 ```
 We also need to specify the year of the corresponding set of offspring.
@@ -228,7 +230,7 @@ if (any(oopsie))
     dat[oopsie, "total.pods.collected"] <- dat[oopsie, "total.pods"]
 ```
 
-## Subset Data for pedigreed cohort
+## Subset Data for Pedigreed Cohort
 
 Subset the data to get one part we want to analyze separately.
 ```{r data.too}
@@ -263,7 +265,7 @@ unique(subdatnext$year)
 Now for offspring data.
 Subset the data to get one part we want to analyze separately.
 Other parts are analyzed in the same way.
-Divide into year-specific files.
+Divide into year-specific data frames.
 ```{r dataf.too}
 subdatfield <- subset(dat, year == myyearf & cohort == "field")
 ```
@@ -282,53 +284,17 @@ subdatfield <- droplevels(subdatfield)
 ## Find Grandfathers
 
 Now we have to look up grandfathers of the offspring generation.
-To do this we have to look up data in another file
-and use R function `match`.
+For these offspring, the `paternalID` is zero (meaning unknown)
+and the `maternalID` is the `positionID` of the maternal plant.
+So the grandfather is the `paternalID` of this maternal plant.
 ```{r findGDs2016}
-plantingdat2015 <- read.csv("KW_2015_planting_data.csv")
-names(plantingdat2015)
-idx <- match(subdatfield$position, plantingdat2015$position)
-length(idx)
-head(idx)
-```
-Every plant is in a certain row and position within row.
-We combine these into one key.
-```{r findGDs2016.too}
-pos_row <- with(subdatfield, paste(position,row,sep="_"))
-head(pos_row)
-pos_row_planting2015 <- with(plantingdat2015, paste(position,row,sep="_"))
-idx <- match(pos_row, pos_row_planting2015)
-```
-Now R vector `idx` tells us which individuals in R data frame `subdatfield`
-correspond to which individuals in R dataframe `plantingdat2015`, that is,
-```{r findGDs2016.too.show}
-identical(pos_row, pos_row_planting2015[idx])
-```
-The fact that there are no `NA` values in `idx` means every individual in
-data frame `subdatfield` has been found in dataframe `plantingdat2015`.
-```{r findGDs2016.too.show.too}
-all(! is.na(idx))
-```
-
-Now we do the find the dams of these individuals.
-
-```{r findGDs2016.too.too}
-matloc <- with(plantingdat2015,
-    paste(maternalposition[idx], maternalrow[idx], sep="_"))
-matlocsubdat <- with(subdat, paste(position, row, sep="_"))
-idx2 <- match(matloc, matlocsubdat)
-all(! is.na(idx2))
-length(idx2) == nrow(subdatfield)
-```
-So now `idx2` gives the index in `subdat` of the mother of the individual
-in the corresponding position in `subdatfield`.  So the following adds
-a maternal grandfather variable to R data frame `subdatfield`.
-```{r findGDs2016.too.too.too}
-subdatfield <- transform(subdatfield, grandfather=subdat$paternalID[idx2])
-
+idx <- match(subdatfield$maternalID, subdat$positionID)
+subdatfield <- transform(subdatfield, grandfather=subdat$paternalID[idx])
 names(subdatfield)
 head(subdatfield)
+with(subdatfield, length(unique(maternalID)))
 with(subdatfield, length(unique(grandfather)))
+with(subdatfield, unique(grandfather))
 ```
 
 ## Reshape Data
@@ -373,46 +339,25 @@ modmat.siredam <- cbind(modmat.sire, modmat.dam)
 
 ```{r key.gc, echo=FALSE}
 key <- tools::md5sum(mydata)
+key.prev <- digest(redata)
+key.par <- digest(redatanext)
+key.off <- digest(redataf)
 ```
 
 Then we can fit the model.
-```{r random.effect.too, cache=TRUE, cache.extra=key}
+```{r random.effect.too, cache=TRUE, cache.extra=c(key,key.prev)}
 rout <- reaster(resp ~ fit + varb,
     list(parental=~0 + modmat.siredam, block = ~ 0 + fit:block),
     pred, fam, varb, id, root, data = redata)
 ```
 And show the results.
 ```{r random.effect.show, cache=TRUE, dependson="random.effect.too"}
-summary(rout)
+summary(rout, standard.deviation = FALSE)
 ```
 
 Look at the first step towards standard errors.
 ```{r random.effect.vcov, cache=TRUE, dependson="random.effect.too"}
-vout <- vcov(rout)
-range(eigen(vout, symmetric = TRUE, only.values = TRUE)$values)
-```
-Standard errors do not exist.  Approximate variance-covariance matrix
-not positive definite (using the computer's default inexact arithmetic).
-
-Try a smaller model (no maternal effects in model).
-```{r reaster.prev, cache=TRUE, cache.extra=key}
-rout <- reaster(resp ~ fit + varb,
-    list(sire = ~ 0 + fit:paternalID, block = ~ 0 + fit:block),
-    pred, fam, varb, id, root, data = redata)
-```
-And show the results.
-```{r reaster.prev.show, dependson="reaster.prev"}
-summary(rout)
-```
-Look at the first step towards standard errors.
-```{r reaster.prev.vcov, cache=TRUE, dependson="reaster.prev"}
-vout <- vcov(rout)
-range(eigen(vout, symmetric = TRUE, only.values = TRUE)$values)
-```
-
-Dump for debugging.
-```{r dump}
-save(redata, pred, fam, file = "redata.rda")
+vout <- vcov(rout, re.too = TRUE, standard.deviation = FALSE)
 ```
 
 ## Another Random Effect Aster Model
@@ -423,14 +368,18 @@ modmat.dam.next <- model.matrix(~ 0 + fit:maternalID, redatanext)
 modmat.siredam.next <- cbind(modmat.sire.next, modmat.dam.next)
 ```
 
-```{r random.effect.next, cache=TRUE, cache.extra=key}
+```{r random.effect.next, cache=TRUE, cache.extra=c(key,key.par)}
 rout.next <- reaster(resp ~ fit + varb,
     list(parental=~0 + modmat.siredam.next, block = ~ 0 + fit:block),
     pred, fam, varb, id, root, data = redatanext)
 ```
 And show the results.
 ```{r random.effect.show.next, cache=TRUE, dependson="random.effect.next"}
-summary(rout.next)
+summary(rout.next, standard.deviation = FALSE)
+```
+Also calculate variance-covariance matrix of estimates.
+```{r random.effect.vcov.next, cache=TRUE, dependson="random.effect.next"}
+vout.next <- vcov(rout.next, re.too = TRUE, standard.deviation = FALSE)
 ```
 
 ## Random Effect Aster Model for offspring generation ('field')
@@ -442,13 +391,18 @@ For this reason, we do not know paternity of individuals in this generation.
 We focus on
 mean fitnesses for families descending from individual sires in the set
 of crosses that produced the pedigreed generation.
-```{r random.effect.grandfather, cache=TRUE, cache.extra=key}
+```{r random.effect.grandfather, cache=TRUE, cache.extra=c(key,key.off)}
 routf.granddad <- reaster(resp ~ fit + varb,
     list(parental = ~ 0 + fit:grandfather, block = ~ 0 + fit:block),
     pred, fam, varb, id, root, data = redataf)
 ```
-```{r random.effect.grandfather.summary}
-summary(routf.granddad)
+```{r random.effect.grandfather.summary, cache=TRUE, dependson="random.effect.grandfather"}
+summary(routf.granddad, standard.deviation = FALSE)
+```
+
+Also calculate variance-covariance matrix of estimates.
+```{r random.effect.vcov.grandfather, cache=TRUE, dependson="random.effect.grandfather"}
+vout.granddad <- vcov(routf.granddad, re.too = TRUE, standard.deviation = FALSE)
 ```
 
 ### Maternal Effects
@@ -469,23 +423,22 @@ summary(routf.mom)
 # Mapping Sire and Grandsire Effects to Mean Values
 
 We follow Section 9 of @zenodo *mutatis mutandis*.  The main changes are
-
- * here we will have a vectorizing function that simultaneously does
-   all expected fitness values for all individuals and
-
- * here we will calculate derivatives (Jacobian matrix) as well as function
-   values.
-
+here we will have a vectorizing function that simultaneously does
+mean fitness values for a specified set of individuals.
 ```{r map}
-map <- function(rout, is.subsamp, include.random) {
+map.factory <- function(rout, is.subsamp, include.random, which.ind) {
     stopifnot(inherits(rout, "reaster"))
     stopifnot(is.logical(is.subsamp))
     stopifnot(is.logical(include.random))
+    stopifnot(is.logical(which.ind))
     aout <- rout$obj
     stopifnot(inherits(aout, "aster"))
     nnode <- ncol(aout$x)
-    if(nnode != length(is.subsamp))
+    nind <- nrow(aout$x)
+    if (nnode != length(is.subsamp))
         stop("length(is.subsamp) not the number of nodes in the aster graph")
+    if (nind != length(which.ind))
+        stop("length(which.ind) not the number of individual aster data")
     fixed <- rout$fixed
     random <- rout$random
     alpha <- rout$alpha
@@ -506,32 +459,263 @@ map <- function(rout, is.subsamp, include.random) {
     fake.modmat <- array(as.vector(fake.modmat),
         dim = c(dim(aout$modmat)[1:2], ncol(fake.modmat)))
     fake.out$modmat <- fake.modmat
-    fake.out$coefficients <- fake.beta
-    pout <- predict(fake.out, model.type = "conditional",
-        is.always.parameter = TRUE, gradient = TRUE)
+    nparm <- length(rout$alpha) + length(rout$b) + length(rout$nu)
+    is.alpha <- seq(1, nparm) %in% seq_along(rout$alpha)
+    is.bee <- seq(1, nparm) %in% (length(rout$alpha) + seq_along(rout$b))
+    function(alphabeenu) {
+        if (! missing(alphabeenu)) {
+            stopifnot(is.numeric(alphabeenu))
+            stopifnot(is.finite(alphabeenu))
+            delta.alpha <- alphabeenu[is.alpha]
+            delta.bee <- alphabeenu[is.bee]
+            fake.beta <- fake.beta + c(delta.alpha, delta.bee[include.random])
+        }
+        fake.out$coefficients <- fake.beta
+        pout <- predict(fake.out, model.type = "conditional",
+            is.always.parameter = TRUE)
+        xi <- matrix(pout, ncol = nnode)
+        xi <- xi[ , ! is.subsamp, drop = FALSE]
+        mu <- apply(xi, 1, prod)
+        return(mu[which.ind])
+    }
 }
-
-
-
-#        xi <- predict(aout, newcoef = alpha,
-#            model.type = "conditional", is.always.parameter = TRUE)
-#        xi <- matrix(xi, ncol = nnode)
-#        # always use drop = FALSE unless you are sure you don't want that
-#        # here if we omit drop = FALSE and there is only one non-subsampling
-#        # node, the code will break (apply will give an error)
-#        xi <- xi[ , ! is.subsamp, drop = FALSE]
-#        mu <- apply(xi, 1, prod)
-#        # mu is unconditional mean values for model without subsampling
-#        # in this application all components mu are the same because no
-#        # covariates except varb, so just return only one
-#        mu[1]
 ```
 
-Test.
-```{r map.test}
-foo <- map(rout, grepl("collected", vars), grepl("paternal", names(rout$b)))
-names(foo)
+Test.  Calculate for first `reaster` fit.
+```{r map.prev}
+idx <- match(levels(subdat$paternalID), subdat$paternalID)
+which.ind <- rep(FALSE, nrow(subdat))
+which.ind[idx] <- TRUE
+setequal(subdat$paternalID[which.ind], levels(subdat$paternalID))
+
+doit.prev <- map.factory(rout, grepl("collected", vars),
+    grepl("paternal", names(rout$b)), which.ind)
+mu.prev <- doit.prev()
 ```
+
+We need a help page (not a literal one) for R function `map.factory`,
+so here goes.
+
+R function `map.factory` produces a function with one argument
+that calculates mean fitness estimates for individuals
+(not for the population) from a `reaster` fit.
+That is, it is a function whose value is another function.
+The arguments of `map.factory` are
+
+ * `rout` an object returned by R function `reaster`,
+
+ * `is.subsamp` a logical vector that indicates which nodes of the
+   aster graph for a single individual are subsampling nodes,
+
+ * `include.random` a logical vector that indicates which random effects
+   of the reaster fit we want to use in the estimation (in this document
+   sire or grandsire effects, as the case may be),
+
+ * `which.ind` a logical vector that indicates which individuals in the
+   data for the reaster fit we want to use for estimation (when we only
+   use sire effects for prediction all individuals with the same sire
+   have the same prediction because we have no fixed effects that differ
+   among individuals).
+
+The value of this function is another function with signature
+```
+function(alphabeenu)
+```
+
+The argument may be missing, in which case it is taken to be the zero vector.
+Otherwise, it is the length of the entire parameter vector
+```
+length(rout$alpha) + length(rout$b) + length(rout$nu)
+```
+even though not all of these are used in the prediction.
+(This is convenient for evaluating gradients numerically.)  The argument
+`alphabeenu` is not the parameter vector but rather the delta from the MLE
+(so when missing, we are evaluating the MLE prediction).
+
+**Warning:** This function only works for linear aster graphs, as explained
+in Section 9 of @zenodo.  Appendix (Section 16) of @zenodo says how to
+correct the `map` function of that paper for a non-linear graph.
+Similar considerations would apply here.
+
+Now redo for the other `reaster` objects.
+
+```{r map.par}
+setequal(levels(subdat$paternalID), levels(subdatnext$paternalID))
+idx <- match(levels(subdat$paternalID), subdatnext$paternalID)
+which.ind <- rep(FALSE, nrow(subdatnext))
+which.ind[idx] <- TRUE
+setequal(subdatnext$paternalID[which.ind], levels(subdat$paternalID))
+
+doit.par <- map.factory(rout.next, grepl("collected", vars),
+    grepl("paternal", names(rout.next$b)), which.ind)
+mu.par <- doit.par()
+```
+
+```{r map.off.preamble}
+setequal(subdat$paternalID, subdatfield$grandfather)
+```
+Not all sires are grandsires, so we vary the above.
+```{r map.off}
+idx <- match(sort(unique(subdatfield$grandfather)), subdatfield$grandfather)
+which.ind <- rep(FALSE, nrow(subdatfield))
+which.ind[idx] <- TRUE
+setequal(subdatfield$grandfather[which.ind],
+    sort(unique(subdatfield$grandfather)))
+
+doit.off <- map.factory(routf.granddad, grepl("collected", vars),
+    grepl("paternal", names(routf.granddad$b)), which.ind)
+mu.off <- doit.off()
+```
+
+# Decomposition of Difference in Mean Fitness
+
+We now follow @mean-fitness.  The total change in mean fitness from
+one generation to the next is given by equation (1) in that document.
+
+Before we can do that, we need to account for not all sires being grandsires.
+```{r check.and.match}
+identical(sort(unique(subdat$paternalID)),
+    sort(unique(subdatnext$paternalID)))
+identical(sort(unique(subdat$paternalID)),
+    sort(unique(subdatfield$grandfather)))
+all(is.element(sort(unique(subdatfield$grandfather)),
+    sort(unique(subdat$paternalID))))
+idx <- match(sort(unique(subdatfield$grandfather)), levels(subdat$paternalID))
+```
+
+Now we implement equation (1) of @mean-fitness.
+```{r total.change}
+delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) -  mean(mu.prev)
+delta.total
+```
+
+Now we implement equation (2a) of @mean-fitness.
+```{r environmental.change}
+delta.environ <- mean(mu.par - mu.prev)
+delta.environ
+```
+
+Now we implement equation (2b) of @mean-fitness.
+```{r fftns.change}
+delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.par)
+delta.fftns
+```
+
+Now we implement equation (2c) of @mean-fitness.
+```{r non.fftns.change}
+delta.non.fftns <- delta.total - delta.environ - delta.fftns
+delta.non.fftns
+```
+
+```{r delta-table, echo=FALSE, tab.cap="Change in Mean Fitness in One Generation"}
+# note cannot have any dots in chunk label because it screws up caption
+# that is, delta.table is fubar but delta-table is OK
+foo <- c(delta.fftns, delta.non.fftns, delta.environ, delta.total)
+names(foo) <- c("FFTNS", "non-FFTNS", "environmental", "total")
+foo <- cbind(foo)
+colnames(foo) <- "Estimate"
+knitr::kable(foo, digits=4)
+```
+Table \@ref(tab:delta-table) shows these in a nice table.
+
+# Standard Errors for These Estimates
+
+Because we did the estimates in two steps, we do the standard errors in
+two steps likewise.
+
+## Standard Errors for Individual Mean Fitnesses
+
+Calculate variance-covariance matrix for estimated individual mean fitnesses
+in one subset.
+```{r vcov-prev-jacobian,cache=TRUE,dependson="random.effect.too"}
+zero <- rep(0, length(rout$alpha) + length(rout$b) + length(rout$nu))
+jack.prev <- jacobian(doit.prev, zero)
+```
+
+Now apply the delta method to obtain variance-covariance matrix for `mu.prev`
+```{r vcov-prev, cache=TRUE, dependson=c("vcov-prev-jacobian","random.effect.vcov")}
+vcov.mu.prev <- jack.prev %*% vout %*% t(jack.prev)
+length(mu.prev)
+dim(vcov.mu.prev)
+```
+
+Looks good.  Now do the others.
+```{r vcov-par, cache=TRUE, dependson=c("random.effect.next","random.effect.vcov.next")}
+jack.par <- jacobian(doit.par, zero)
+vcov.mu.par <- jack.par %*% vout.next %*% t(jack.par)
+```
+```{r vcov-off, cache=TRUE, dependson=c("random.effect.grandfather","random.effect.vcov.grandfather")}
+zero <- rep(0, length(routf.granddad$alpha) + length(routf.granddad$b) +
+    length(routf.granddad$nu))
+jack.off <- jacobian(doit.off, zero)
+vcov.mu.off <- jack.off %*% vout.granddad %*% t(jack.off)
+```
+
+## Standard Errors for Changes in Population Mean Fitness and Its Parts
+
+We start by making a joint variance-covariance matrix for all the individual
+estimates.  Since these estimate vectors are for different experiments, hence
+statistically independent, this matrix is block diagonal.
+```{r block}
+vcov.combo <- bdiag(vcov.mu.prev, vcov.mu.par, vcov.mu.off)
+```
+
+Now we need a function that calculates our population mean fitness estimates
+from the combined individual mean fitness vector.
+```{r combo}
+mu.combo <- c(mu.prev, mu.par, mu.off)
+is.prev <- seq_along(mu.combo) %in% seq_along(mu.prev)
+is.par <- seq_along(mu.combo) %in% (length(mu.prev) + seq_along(mu.par))
+is.off <- seq_along(mu.combo) %in% (length(mu.prev) + length(mu.par) +
+    seq_along(mu.par))
+all.equal(mu.prev, mu.combo[is.prev])
+all.equal(mu.par, mu.combo[is.par])
+all.equal(mu.off, mu.combo[is.off])
+doit.combo <- function(moo) {
+    stopifnot(is.numeric(moo))
+    stopifnot(is.finite(moo))
+    stopifnot(length(moo) == length(mu.combo))
+    mu.prev <- moo[is.prev]
+    mu.par <- moo[is.par]
+    mu.off <- moo[is.off]
+    idx <- match(sort(unique(subdatfield$grandfather)),
+        levels(subdat$paternalID))
+    delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) - mean(mu.prev)
+    delta.environ <- mean(mu.par - mu.prev)
+    delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.par)
+    delta.non.fftns <- delta.total - delta.environ - delta.fftns
+    result <- c(delta.fftns, delta.non.fftns, delta.environ, delta.total)
+    names(result) <- c("FFTNS", "non.FFTNS", "environmental", "total")
+    return(result)
+}
+```
+
+Try it.
+```{r test.combo}
+deltas <- doit.combo(mu.combo)
+identical(c(delta.fftns, delta.non.fftns, delta.environ, delta.total),
+    as.vector(deltas))
+```
+
+Good!  So now calculate Jacobian for this part of the change-of-parameter.
+```{r jack.combo,cache=TRUE,dependson=c("vcov-prev","vcov-par","vcov-off")}
+jack.combo <- jacobian(doit.combo, mu.combo)
+vcov.deltas <- jack.combo %*% vcov.combo %*% t(jack.combo)
+```
+
+Make a nice table.
+```{r table}
+foo <- cbind(deltas, sqrt(diag(vcov.deltas)))
+colnames(foo) <- c("Estimate", "Std. Error")
+foo
+```
+```{r delta-table-with-se, echo=FALSE, tab.cap="Change in Mean Fitness in One Generation"}
+# note cannot have any dots in chunk label because it screws up caption
+# that is, delta.table is fubar but delta-table is OK
+rownames(foo)[2] <- "non-FFTNS genetic"
+knitr::kable(foo, digits=4)
+```
+Table \@ref(tab:delta-table-with-se) shows these in a nice table.
 
 
 # References

@@ -1,0 +1,66 @@
+
+---
+title: "Check Data"
+author: "Charles J. Geyer"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+---
+
+We need to compare the data we are using for the decomposition of change
+in mean fitness and the data used by Kulbaba et al.\ (2019) and the
+correction (Geyer, et al., 2022).
+
+```{r compare-kw}
+foo <- read.csv("KWdat.csv")
+bar <- read.csv("~/Papers/Evolution-correction/kwdata.csv")
+```
+A function to compare rows of data frames.
+```{r compare-function}
+qux <- function(foo) {
+    stopifnot(is.data.frame(foo))
+    rownames(foo) <- NULL
+    result <- character(nrow(foo))
+    for (i in 1:nrow(foo))
+        result[i] <- digest::digest(foo[i, ])
+    result
+}
+```
+Use it to compare.
+```{r compare-too}
+identical(foo, bar)
+```
+
+Ruth now says it is just not having the offspring.
+```{r off-kw}
+baz <- subset(foo, cohort == "greenhouse")
+identical(qux(bar), qux(baz))
+```
+OK!
+
+Now for GC.
+```{r compare-gc}
+foo <- read.csv("GCdat.csv")
+bar <- read.csv("~/Papers/Evolution-correction/gcdata.csv")
+bar <- transform(bar, seedpool = as.integer(seedpool))
+<<compare-too>>
+<<off-kw>>
+```
+OK!
+
+Somehow we have `NA` for variable `seedpool` for all cases in
+`bar` and `baz` but one is a logical `NA` and the other is integer `NA`
+so they don't compare equal and we have to fix up as above (the `transform`
+statement).
+
+# What is positionID
+
+```{r subdat}
+subdat <- subset(foo, year == 2015 & cohort == "greenhouse" &
+    paternalID != 0 & maternalID != 0)
+sort(unique(subdat$paternalID))
+sort(unique(subdat$maternalID))
+sort(intersect(subdat$maternalID, subdat$paternalID))
+all(foo$positionID == 1:nrow(foo))
+all(foo$positionID == sort(foo$positionID))
+foo$positionID
+```
