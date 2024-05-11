@@ -191,11 +191,12 @@ unknown parameters to estimate (so-called \emph{variance components}).
 R function \code{reaster} in R package \code{aster} \citep{aster-package}
 provides standard errors for the estimated parameters (fixed effects and
 variance components) and, more generally, provides (an approximation to)
-the Fisher information matrix for these parameters.  The latter is
-undocumented although used in published examples
-\citep[Supplementary material Section~12.3.1]{zenodo}.  And the inverse
-of this matrix is (by the ``usual'' asymptotics of maximum likelihood)
-the variance-covariance matrix of the parameter estimates.
+the inverse Fisher information matrix for these parameters, which is the
+asymptotic variance-covariance matrix of their sampling distribution.
+Since version 1.2-1 of R package \code{aster} this variance-covariance
+matrix is provided by a method of R generic
+function \code{vcov} that handles objects of class \code{reaster} (which
+are objects returned by R function \code{reaster}).
 
 \subsection{Estimates of Random Effects}
 
@@ -318,12 +319,13 @@ But the mapping is nonlinear, and nonlinear mappings need not preserve
 modes of distributions.
 
 So we can no longer call these modes.
-They are modes on the canonical parameter scale but not on the mean value
-scale.
+They are modes on the canonical parameter scale but not necessarily
+on the mean value scale.
 Perhaps we can call them mapped conditional mode predictors (MCMP).
 
 As a possible alternative, we could try to find the mode of the conditional
 distribution of random effects mapped to the mean value parameter scale.
+But we do not try out this suggestion.
 
 \subsection{Two Ways of Thinking}
 
@@ -349,6 +351,26 @@ Here we use the latter interpretation.
 
 \subsection{Estimation and Standard Errors}
 \label{sec:m-estimation}
+
+\subsubsection{Computing}
+\label{sec:m-estimation-computing}
+
+Since version 1.2-1 of R package \code{aster} \citep{aster-package}
+the standard errors for this scheme, which treats random effects as
+parameters, just like fixed effects except that they
+are regularized (shrunken), is implemented by the method of R generic
+function \code{vcov} that handles objects of class \code{reaster}
+(which are the values returned by R function \code{reaster})
+when the optional
+argument \code{re.too = TRUE} is provided to R function \code{vcov}.
+
+Thus one may skip the following section, which provides the theory of
+these variance-covariance estimates, if one just wants calculations.
+The following section, however, is the only place where that theory
+is written down, hence the only justification of these variance-covariance
+estimates.
+
+\subsubsection{Theory}
 
 Following \citet{reaster} in the text surrounding their equation (7),
 the vector $(\hat{\alpha}, \hat{b}, \hat{\nu})$ is the joint minimizer
@@ -543,75 +565,56 @@ the current version (not yet on CRAN) of R package \code{aster}
 
 \subsection{The Delta Method}
 
-\subsubsection{To Standard Deviations}
+As explained in Section~\ref{sec:m-estimation-computing} above,
+R generic function \code{vcov} with optional arguments
+\code{re.too = TRUE} and \code{standard.deviation = FALSE} can
+be used to obtain the asymptotic variance covariance for what R
+function \code{reaster} considers the parameters, the vector \code{alpha}
+of fixed effects, the vector \code{b} of random effects, and the vector
+\code{nu} of variance components.
 
-First we have the case (not used in this document, but possibly used
-by other users of new R function \code{vcov.reaster} of square roots
-of variance components.  Here we have the transformation from
-$(\alpha, b, \nu)$ to $(\alpha, c, \sigma)$ where $c = b / \sigma$
-and $\sigma = \sqrt{\nu}$.  For the delta method we want the derivative
-of this map. which has Jacobian matrix given by
-\begin{alignat*}{2}
-   \frac{\partial c_i}{\partial b_i} & = \frac{1}{\sigma_i}
-   \\
-   \frac{\partial c_i}{\partial \nu_j} & = - \frac{b_i}{2 \sigma_j^3}
-   & \qquad & \var(b_i) = \nu_j
-   \\
-   \frac{\partial \sigma_j}{\partial \nu_j} & = \frac{1}{2 \sigma_j}
-\end{alignat*}
-all other derivatives being either zero or, in the case of derivatives
-of components of $\alpha$ with respect to themselves, one.
+To put these parameter estimates through further transformations, we
+apply the multivariate delta method.  Call the whole parameter vector
+$\theta$ (the concatenation of $\alpha$, $b$, and $\nu$).  If $\theta_0$
+is the true unknown parameter value and $g$ is a vector-to-vector
+function that is differentiable at $\theta_0$ with derivative matrix
+(also called Jacobian matrix) $g'(\theta_0)$, then the multivariate delta
+method says: if $\hat{\theta}$ is approximately multivariate normal
+with mean vector $\theta$ and variance-covariance matrix $\Sigma$,
+then $g(\hat{\theta})$ is approximately multivariate normal
+with mean vector $g(\theta)$ and variance-covariance matrix
+$g'(\theta_0)^T \Sigma g'(\theta_0)$.
 
+We follow this literally.
+\begin{itemize}
+\item Code the mathematical function $g$ as an R function
+\item Use R function \code{jacobian} in R package \code{numDeriv} to
+    calculate the Jacobian matrix $g'(\hat{\theta})$ which estimates
+    $g'(\theta_0)$.
+\item Use R function \code{vcov} in R package \code{aster} with optional
+    arguments \code{re.too = TRUE} and \code{standard.deviation = FALSE}
+    to compute the approximate variance-covariance matrix of $\hat{\theta}$.
+    Call that $\widehat{\Sigma}$.
+\item Compute $g'(\hat{\theta})^T \widehat{\Sigma} g'(\hat{\theta})$.
+\end{itemize}
 
-\subsubsection{To Mean Values}
-
-Now that we have
-an estimate $\widehat{U}^{-1} \widehat{V} (\widehat{U}^{-1})^T$
-of the sampling variance (matrix) of
-the vector $(\hat{\alpha}, \hat{b}, \hat{\nu})$, we need to turn this
-into an estimator of the variance (matrix) of the vector $\hat{\mu}$ of
-fitnesses of individuals.  These can then be put through the equations
-in Section~\ref{sec:decompose} to obtain the joint variance matrix of
-the estimators of our decomposition of mean fitness proposed in that section.
-
-Now for a non-apology apology.  There is no good way to do this with the
-functions in the R package \code{aster}.  And there can be no good way
-(as far as we can see) to write a function that will do more than one
-particular application (and not be useful for anybody else).  Hence
-we will, of course, write such functions for our analysis (or, more
-precisely, function factories: functions that produce functions).
-But those will only serve as examples that other users will have to
-modify for the details of their situations.
-
-In our particular examples, we want mean values that are functions of
-fixed effects and sire (or corresponding grandsire) effects.  We ignore
-block effects and maternal effects (which some fitted models have and
-some do not).  One already sees that this is a very special situation
-that no widely useful R function could be designed for.  But there is
-even more complication.  Our example has subsampling
-(\citealp{aster-theory}, Chapter~3; \citealp{zenodo}, Sections~9 and~16),
-so mean values have to be corrected for the specific pattern of subsampling.
-
-R package \code{aster} has two functions, \code{predict.aster} (the method
-of R generic function \code{predict} that handles R objects of class
-\code{aster}) and \code{astertransform}.  Neither does exactly what we
-want here because neither works with objects of class \code{reaster}.
-(And if there were such a function, it still wouldn't do what is wanted
-here, but rather what was wanted for some earlier application.)
-And we are going to have to use R function \code{predict.aster} because
-only it returns gradients as well as values.
-
-Here, unlike the example in \citet[Section~9]{zenodo} we will have to
-fake an object of class \code{aster} that has the parameter vector we
-want (all the fixed effects but only some but not all of the random effects)
-and the corresponding model matrix (the \code{rbind} of the model matrix
-for fixed effects and the model matrix for the part of the random effects
-that we are including as parameters), and then all of the rest of the
-stuff that goes in an object of class \code{aster}, which we can copy
-from the \code{obj} component of the object of class \code{reaster} that
-is the model fit we are currently processing.  Then we can follow the
-example in \citet[Section~9]{zenodo} except that we perhaps want to
-get analytic gradients using the chain rule from multivariate calculus.
+When we do another stage of transformation, we do the same thing, except
+now we are calling the vector of estimates we are starting this step with
+$\hat{\theta}$ (what was $g(\hat{\theta})$ before) and we are calling its
+true unknown parameter value $\theta_0$ and its
+approximate variance-covariance matrix $\widehat{\Sigma}$ (what we computed
+in our previous application or applications of the delta method) and now
+$g$ denotes some new parameter transformation function.  Then the delta
+method says:
+\begin{itemize}
+\item Code the mathematical function $g$ as an R function
+\item Use R function \code{jacobian} in R package \code{numDeriv} to
+    calculate the Jacobian matrix $g'(\hat{\theta})$ which estimates
+    $g'(\theta_0)$.
+\item Compute $g'(\hat{\theta})^T \widehat{\Sigma} g'(\hat{\theta})$.
+\end{itemize}
+(so $\widehat{\Sigma}$ is the variance-covariance matrix computed in the
+previous stage, rather than the output of R function \code{vcov}).
 
 \begin{thebibliography}{}
 
@@ -624,7 +627,7 @@ Breslow, N.~E., and Clayton, D.~G. (1993).
 
 \bibitem[Geyer(2024)]{aster-package}
 Geyer, C.~J. (2024).
-\newblock R package \texttt{aster}: Aster Models, version 1.2.
+\newblock R package \texttt{aster}: Aster Models, version 1.2-1.
 \newblock \url{https://cran.r-project.org/package=aster}.
 
 \bibitem[Geyer(unpublished)]{aster-theory}
