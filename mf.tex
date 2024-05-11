@@ -583,7 +583,7 @@ method says: if $\hat{\theta}$ is approximately multivariate normal
 with mean vector $\theta$ and variance-covariance matrix $\Sigma$,
 then $g(\hat{\theta})$ is approximately multivariate normal
 with mean vector $g(\theta)$ and variance-covariance matrix
-$g'(\theta_0)^T \Sigma g'(\theta_0)$.
+$g'(\theta_0) \Sigma g'(\theta_0)^T$.
 
 We follow this literally.
 \begin{itemize}
@@ -595,7 +595,7 @@ We follow this literally.
     arguments \code{re.too = TRUE} and \code{standard.deviation = FALSE}
     to compute the approximate variance-covariance matrix of $\hat{\theta}$.
     Call that $\widehat{\Sigma}$.
-\item Compute $g'(\hat{\theta})^T \widehat{\Sigma} g'(\hat{\theta})$.
+\item Compute $g'(\hat{\theta}) \widehat{\Sigma} g'(\hat{\theta})^T$.
 \end{itemize}
 
 When we do another stage of transformation, we do the same thing, except
@@ -611,7 +611,7 @@ method says:
 \item Use R function \code{jacobian} in R package \code{numDeriv} to
     calculate the Jacobian matrix $g'(\hat{\theta})$ which estimates
     $g'(\theta_0)$.
-\item Compute $g'(\hat{\theta})^T \widehat{\Sigma} g'(\hat{\theta})$.
+\item Compute $g'(\hat{\theta}) \widehat{\Sigma} g'(\hat{\theta})^T$.
 \end{itemize}
 (so $\widehat{\Sigma}$ is the variance-covariance matrix computed in the
 previous stage, rather than the output of R function \code{vcov}).
