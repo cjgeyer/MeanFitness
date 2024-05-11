@@ -36,8 +36,8 @@ into three parts:
 that due to change in genetic composition described by FFTNS,
 that due to change in genetic composition not described by FFTNS, and
 that due to change in environment.
-Here, we obtain estimates of a) mean fitness of the pedigreed parental populations before selection (previously presented in @kulbaba-et-al and the
-Correction); b) mean fitness of the pedigreed parental population after selection (i.e. accounting for the change in representation of the families
+Here, we obtain estimates of a) mean fitness of the pedigreed parental populations before selection (previously presented in @kulbaba-et-al and its
+correction); b) mean fitness of the pedigreed parental population after selection (i.e. accounting for the change in representation of the families
 reflected in differential seed production); and mean fitness of the offspring of the pedigreed sets
 (i.e. the outcome of natural selection on the parental
 generation when grown in the same sites in the following year).
@@ -80,10 +80,10 @@ library("digest")
 library("Matrix")
 ```
 
-Need at least version 1.2 of R package `aster` for R generic function `vcov`
+Need at least version 1.2-1 of R package `aster` for R generic function `vcov`
 to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
-stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2") >= 0)
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2-1") >= 0)
 ```
 
 ```{r checkerrors, echo=FALSE}
@@ -530,7 +530,7 @@ length(rout$alpha) + length(rout$b) + length(rout$nu)
 even though not all of these are used in the prediction.
 (This is convenient for evaluating gradients numerically.)  The argument
 `alphabeenu` is not the parameter vector but rather the delta from the MLE
-(so when missing, we are evaluating the MLE prediction).
+(so when missing or zero, we are evaluating the MLE prediction).
 
 **Warning:** This function only works for linear aster graphs, as explained
 in Section 9 of @zenodo.  Appendix (Section 16) of @zenodo says how to
