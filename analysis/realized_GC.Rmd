@@ -557,13 +557,12 @@ setequal(subdat$paternalID, subdatfield$grandfather)
 Not all sires are grandsires, so we vary the above.
 ```{r map.off}
 idx <- match(sort(unique(subdatfield$grandfather)), subdatfield$grandfather)
-which.ind <- rep(FALSE, nrow(subdatfield))
-which.ind[idx] <- TRUE
+which.ind <- seq_along(subdatfield$grandfather) %in% idx
 setequal(subdatfield$grandfather[which.ind],
     sort(unique(subdatfield$grandfather)))
 
 doit.off <- map.factory(routf.granddad, grepl("collected", vars),
-    grepl("paternal", names(routf.granddad$b)), which.ind)
+    grepl("grandfather", names(routf.granddad$b)), which.ind)
 mu.off <- doit.off()
 ```
 
@@ -583,25 +582,44 @@ all(is.element(sort(unique(subdatfield$grandfather)),
 idx <- match(sort(unique(subdatfield$grandfather)), levels(subdat$paternalID))
 ```
 
-Now we implement equation (1) of @mean-fitness.
+Now we estimate total change in mean fitness from one generation to the next.
+This is a modification of equation (1) in @mean-fitness that accounts for
+not all sires being grandsires (`idx`)
 ```{r total.change}
 delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) -  mean(mu.prev)
 delta.total
 ```
 
-Now we implement equation (2a) of @mean-fitness.
+Now we estimate the part of this total change that is due to environment
+(including $G \times E$), equation (2a) of @mean-fitness.
 ```{r environmental.change}
 delta.environ <- mean(mu.par - mu.prev)
 delta.environ
 ```
 
-Now we implement equation (2b) of @mean-fitness.
+Now we estimate the part of this total change that is predicted by FFTNS,
+equation (3) of @mean-fitness (the current draft).
 ```{r fftns.change}
-delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.par)
+delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.prev)
 delta.fftns
 ```
+Actually we have two other subexperiments to do the same thing with.
+So try them too.
+```{r fftns.change-too}
+delta.fftns.par <- sum((mu.par / sum(mu.par) - 1 / length(mu.par)) * mu.par)
+delta.fftns.par
+delta.fftns.off <- sum((mu.off / sum(mu.off) - 1 / length(mu.off)) * mu.off)
+delta.fftns.off
+```
+We could use any linear combination of these three FFTNS estimates as our
+"official" FFTNS estimate.  (Of course, the first two of these FFTNS estimates
+are for the same population in different environments, and the latter two are
+for different populations in the same environment.  So none of these are
+estimating exactly the same thing.)
+For now, we take the first of these.
 
-Now we implement equation (2c) of @mean-fitness.
+Now we estimate the remainder of the total change, which is the part of
+the genetic change not described by FFTNS.
 ```{r non.fftns.change}
 delta.non.fftns <- delta.total - delta.environ - delta.fftns
 delta.non.fftns
@@ -682,10 +700,10 @@ doit.combo <- function(moo) {
         levels(subdat$paternalID))
     delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) - mean(mu.prev)
     delta.environ <- mean(mu.par - mu.prev)
-    delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.par)
+    delta.fftns <- sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.prev)
     delta.non.fftns <- delta.total - delta.environ - delta.fftns
     result <- c(delta.fftns, delta.non.fftns, delta.environ, delta.total)
-    names(result) <- c("FFTNS", "non.FFTNS", "environmental", "total")
+    names(result) <- c("FFTNS", "non-FFTNS", "environmental", "total")
     return(result)
 }
 ```
@@ -705,9 +723,11 @@ vcov.deltas <- jack.combo %*% vcov.combo %*% t(jack.combo)
 
 Make a nice table.
 ```{r table}
+foo.save <- foo
 foo <- cbind(deltas, sqrt(diag(vcov.deltas)))
 colnames(foo) <- c("Estimate", "Std. Error")
 foo
+identical(foo.save, foo[ , 1, drop = FALSE])
 ```
 ```{r delta-table-with-se, echo=FALSE, tab.cap="Change in Mean Fitness in One Generation"}
 # note cannot have any dots in chunk label because it screws up caption
