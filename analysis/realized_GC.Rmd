@@ -7,7 +7,7 @@ author:
   - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
   - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
   - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
-date: "August 19, 2022"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
   bookdown::pdf_document2:
     extra_dependencies: "amscd"
