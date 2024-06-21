@@ -1,0 +1,299 @@
+---
+title: "Preprocessing Data for Estimates of Realized Response to Selection in *Chamaecrista fasciculata* and Decomposition into Environmental and Genetic Parts"
+author:
+  - "Mason W. Kulbaba^[St. Mary's University, mason.kulbaba@stmu.ca, https://orcid.org/0000-0003-0619-7089]"
+  - "Seema N. Sheth^[Department of Plant and Microbial Biology, North Carolina State University, ssheth3@ncsu.edu, https://orcid.org/0000-0001-8284-7608]"
+  - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
+  - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
+  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
+  - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    extra_dependencies: "amscd"
+linkcolor: blue
+urlcolor: blue
+bibliography: foo.bib
+csl: journal-of-the-royal-statistical-society.csl
+link-citations: true
+---
+
+# License
+
+This work is licensed under a Creative Commons
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The git repository for these analyses is
+https://github.com/cjgeyer/mf.
+This repo is not currently public.
+
+# R
+
+ * The version of R used to make this document is `r getRversion()`.
+
+ * The version of the `rmarkdown` package used to make this document is
+   `r packageVersion("rmarkdown")`.
+
+ * The version of the `bookdown` package used to make this document is
+   `r packageVersion("bookdown")`.
+
+# Data
+
+## Get It
+
+For the analyses here. the data files are
+```{r data.files}
+files <- list.files(pattern = "*.csv")
+files
+```
+for 
+
+ * Conard Environmental Research Area (CERA),
+
+ * Grey Cloud Dunes Scientific and Natural Area, and
+
+ * Kellogg-Weaver Dunes, also called McCarthy Lake,
+
+respectively.  These files include the same data on the same individuals
+as in the data files used by @kulbaba-et-al and @zenodo but also include
+more individuals, who are offspring of those analyzed before.
+For more details, see @kulbaba-et-al.
+
+As can be seen, we have two kinds of files.  Those without
+`"planting_data"` or `"planting.data"`
+as part of their names are the primary data files for the three sites.
+Those with one of these substrings
+in their names are secondary data files used
+to obtain pedigree information for some analyses.
+
+Distinguish these file types.
+(Dot is magic in regular expressions, matches any character.)
+```{r distinguish}
+files.planting <- grep("planting.data", files, value = TRUE)
+files.primary <- setdiff(files, files.planting)
+files.primary
+files.planting
+```
+
+Read in these files.
+```{r read.data}
+list.names <- substr(files.planting, 1, 2)
+list.names
+data.primary <- data.planting <- list()
+for (i in seq_along(list.names)) {
+    data.primary[[i]] <- read.csv(files.primary[i])
+    data.planting[[i]] <- read.csv(files.planting[i])
+}
+names(data.primary) <- list.names
+names(data.planting) <- list.names
+```
+
+## Enforce Consistency (Tidy)
+
+Now we check that these files have parallel structure.
+```{r data.variables}
+lapply(data.primary, names) |>
+    sapply(function(x) setequal(x, names(data.primary$CS)))
+lapply(data.planting, names) |>
+    sapply(function(x) setequal(x, names(data.planting$CS)))
+foo.primary <- lapply(data.primary, names) |> Reduce(intersect, x = _)
+foo.planting <- lapply(data.planting, names) |> Reduce(intersect, x = _)
+foo.primary
+foo.planting
+```
+
+If we want to perform parallel analyses on these data, then we can only
+use these names.  To assure that we do, we subset the data vertically
+to contain only these variables.
+```{r data.extract.common.variables}
+data.primary <- lapply(data.primary, function(x) x[foo.primary])
+data.planting <- lapply(data.planting, function(x) x[foo.planting])
+```
+
+## Remove Parental ID Zero
+
+Parental ID Zero indicates "unknown" and hence should be removed from
+these analyses.   We have to do this carefully because for
+```{r show.cohort}
+lapply(data.primary, function(x) sort(unique(x$cohort)))
+```
+individuals in the `"field"` cohort, which were open pollinated, sires
+are unknown and this is not a problem but rather by design.  So we
+only remove individuals with sire unknown and not in cohort `"field"`.
+
+Check how many we are going to remove.  Since operator precedence in R
+is from highest to lowest `==` and `!=` (same level) then `&` and then `|`,
+the following does do what is wanted.
+```{r check.parental.zero}
+sapply(data.primary, function(x)
+    sum(with(x, maternalID == 0 | cohort != "field" & paternalID == 0)))
+```
+And do the removal.
+```{r remove.parental.zero}
+data.primary <- lapply(data.primary, function(x)
+    subset(x, ! (maternalID == 0 | cohort != "field" & paternalID == 0)))
+```
+
+## Make Numerical Variables Categorical
+
+Parental ID variables and `block` are numeric (integer).  But statistically
+they are categorical.  So we must make them type `factor` so R will treat
+them correctly.
+```{r to.factor}
+data.primary <- lapply(data.primary, function(x)
+    transform(x, maternalID = as.factor(maternalID),
+    paternalID = as.factor(paternalID), block = as.factor(block)))
+```
+
+## Check for Data Inconsistencies
+
+The aster graph for these data is
+$$
+\begin{CD}
+  1 @>\text{Ber}>> \texttt{Germ}
+  @>\text{Ber}>> \texttt{flw}
+  @>\text{Poi}>> \texttt{total.pods}
+  @>\text{samp}>> \texttt{total.pods.collected}
+  @>\text{Poi}>> \texttt{totalseeds}
+\end{CD}
+$$
+where the node labels correspond to variable names in the data frames
+and the arrow labels correspond to conditional distributions.  Thus all
+of these variables must be nonnegative-integer-valued.
+```{r check.integer}
+data.primary |> lapply(function(x)
+    x[c("Germ", "flw", "total.pods", "total.pods.collected", "totalseeds")]) |>
+    lapply(function(x) sapply(x, function(x) is.integer(x) & all(x >= 0)))
+```
+
+Then we must also have
+```{r check.constraint}
+sapply(data.primary, function(x) with(x, all(Germ <= 1)))
+sapply(data.primary, function(x) with(x, all(flw <= Germ)))
+sapply(data.primary, function(x)
+    with(x, all(total.pods.collected <= total.pods)))
+```
+So this last check fails.
+
+In the following block, `(`some logical expression`) <= (`some other logical
+expression`)` is an R-ism for the [material implication operator](https://en.wikipedia.org/wiki/Material_conditional), that is, left-hand logical expression
+implies right-hand logical expression (if the former is true, then the latter
+is true).  This works because the logical expressions are converted
+to zero-or-one expressions to be compared with `<=`.  The parentheses are
+necessary because of R's operator precedence.
+```{r check.constraint-too}
+sapply(data.primary, function(x)
+    with(x, all((Germ == 0) <= (flw == 0))))
+sapply(data.primary, function(x)
+    with(x, all((flw == 0) <= (total.pods == 0))))
+sapply(data.primary, function(x)
+    with(x, all((total.pods == 0) <= (total.pods.collected == 0))))
+sapply(data.primary, function(x)
+    with(x, all((total.pods.collected == 0) <= (totalseeds == 0))))
+```
+
+How many individuals have problems?
+```{r consistency.check.how.many}
+lapply(data.primary, function(x)
+    subset(x, total.pods.collected > total.pods)[c("total.pods", "total.pods.collected")])
+```
+
+## Fix Data Inconsistencies
+
+So we need to fix up these inconsistencies.
+```{r consistency.fixup}
+data.primary <- lapply(data.primary, function(x)
+    transform(x, total.pods.collected = pmin(total.pods, total.pods.collected)))
+```
+And recheck.
+```{r check.constraint.again}
+<<check.constraint>>
+<<check.constraint-too>>
+```
+OK.
+
+# Find Grandfathers
+
+For the `"field"` cohort, we need to find maternal grandfathers (fathers are
+unknown).  Since this is a complicated process, we do a particular example
+in detail before doing all three data frames with functional programming.
+```{r particular}
+foo <- data.primary$CS
+bar <- data.planting$CS
+names(foo)
+names(bar)
+```
+Variables `"row"` and `"position"` tell where an individual is
+(in both data frames).
+Variables `"maternalrow"` and `"maternalposition"` tell where the mother
+of the corresponding individual is.
+R function `match` allows us to match
+these up, but needs single things to match.  So we paste row and position
+together to make one "key".
+In the check, `<=` is again the [material implication
+operator](https://en.wikipedia.org/wiki/Material_conditional).
+```{r keys}
+foo.key <- with(foo, paste(row, position, sep = ":"))
+bar.key <- with(bar, paste(row, position, sep = ":"))
+baz.key <- with(bar, paste(maternalrow, maternalposition, sep = ":"))
+sort(foo.key) |> head()
+sort(bar.key) |> head()
+foobar <- match(foo.key, bar.key)
+all((foo$cohort == "field") <= (! is.na(foobar)))
+```
+R object `foobar` is now a vector whose length is the row dimension
+of data frame `foo` (which is `data.primary$CS`) and whose values (if not `NA`)
+give the row index of the corresponding individual in data frame `bar`
+(which is `data.planting$CS`).
+
+So far, so good.  Now we look up the maternal position.
+```{r keys-too}
+qux.key <- baz.key[foobar]
+all((foo$cohort == "field") <= (! is.na(qux.key)))
+```
+
+Then we find those mothers.
+```{r keys-too-too}
+fooqux <- match(qux.key, foo.key)
+```
+
+And finally, we find the fathers of those mothers.
+```{r keys-too-too-too}
+grandpaternalID <- with(foo, paternalID[fooqux])
+all((foo$cohort == "field") <= (! is.na(grandpaternalID)))
+```
+
+Now we want to do this with a function we can apply to all three data sets.
+```{r keys.function}
+find.grandfathers <- function(foo, bar) {
+   foo.key <- with(foo, paste(row, position, sep = ":"))
+   bar.key <- with(bar, paste(row, position, sep = ":"))
+   baz.key <- with(bar, paste(maternalrow, maternalposition, sep = ":"))
+   foobar <- match(foo.key, bar.key)
+   qux.key <- baz.key[foobar]
+   fooqux <- match(qux.key, foo.key)
+   transform(foo, grandpaternalID = paternalID[fooqux])
+}
+```
+This function returns data frame `foo` (an argument to the function) with
+an added variable `grandpaternalID`.
+```{r keys.function.apply}
+data.primary <- Map(find.grandfathers, data.primary, data.planting)
+```
+
+Check that these agree with old analysis.
+```{r check.with.old}
+load("KW_subdatfield.rda")
+old <- with(subdatfield, grandfather)
+new <- with(data.primary$KW, grandpaternalID[cohort == "field" & year == 2016])
+identical(as.character(old), as.character(new))
+```
+
+# Write Out Data
+
+```{r write}
+save(data.primary, file = "mf.rda")
+```
+
+# References

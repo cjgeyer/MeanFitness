@@ -331,6 +331,11 @@ head(subdatfield)
 with(subdatfield, length(unique(grandfather)))
 ```
 
+Write out grandfathers for comparison with new document.
+```{r write.out.grand}
+save(subdatfield, file = "KW_subdatfield.rda")
+```
+
 ## Reshape Data
 
 Reshape data the way R function `aster` wants it.
