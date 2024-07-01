@@ -403,7 +403,7 @@ So all of that checks too.
 
 # Tidy Data
 
-One more thing do too.
+One more thing to do.
 ```{r untidy}
 lapply(data.primary, names)
 common.names <- lapply(data.primary, names) |> Reduce(intersect, x = _)

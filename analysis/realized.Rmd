@@ -1,0 +1,163 @@
+---
+title: "Estimates of Realized Response to Selection in *Chamaecrista fasciculata* and Decomposition into Environmental and Genetic Parts"
+author:
+  - "Mason W. Kulbaba^[St. Mary's University, mason.kulbaba@stmu.ca, https://orcid.org/0000-0003-0619-7089]"
+  - "Seema N. Sheth^[Department of Plant and Microbial Biology, North Carolina State University, ssheth3@ncsu.edu, https://orcid.org/0000-0001-8284-7608]"
+  - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
+  - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
+  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
+  - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    extra_dependencies: "amscd"
+    number_sections: true
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+urlcolor: blue
+bibliography: foo.bib
+csl: journal-of-the-royal-statistical-society.csl
+link-citations: true
+---
+
+# Abstract {-}
+
+This work builds on @kulbaba-et-al and the correction to it [@zenodo]
+to obtain estimates of the realized response to natural selection.
+Those articles
+presented estimates of mean fitness and additive genetic variance for fitness
+for three populations of *Chamaecrista fasciculata*,
+each grown in its home location in three years via aster analyses
+of records of components of fitness for a pedigreed set of individuals.
+Here, we consider the realized change in mean fitness from one generation
+to the next, for comparison with the prediction from Fisher's
+Fundamental Theorem of Natural Selection (FFTNS).
+In @mean-fitness change in mean fitness in one generation is divided
+into three parts:
+that due to change in genetic composition described by FFTNS,
+that due to change in genetic composition not described by FFTNS, and
+that due to change in environment.
+Here, we obtain estimates of a) mean fitness of the pedigreed parental
+populations before selection (previously presented in @kulbaba-et-al and its
+correction); b) mean fitness of the pedigreed parental population after
+selection (i.e. accounting for the change in representation of the families
+reflected in differential seed production); and mean fitness of the offspring
+of the pedigreed sets
+(i. e., the outcome of natural selection on the parental
+generation when grown in the same sites in the following year).
+
+We also obtain standard errors of our estimates.
+
+# License
+
+This work is licensed under a Creative Commons
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+# R
+
+ * The version of R used to make this document is `r getRversion()`.
+
+ * The version of the `rmarkdown` package used to make this document is
+   `r packageVersion("rmarkdown")`.
+
+ * The version of the `bookdown` package used to make this document is
+   `r packageVersion("bookdown")`.
+
+ * The version of the `aster` package used to make this document is
+   `r packageVersion("aster")`.
+
+ * The version of the `numDeriv` package used to make this document is
+   `r packageVersion("numDeriv")`.
+
+ * The version of the `digest` package used to make this document is
+   `r packageVersion("digest")`.
+
+ * The version of the `Matrix` package used to make this document is
+   `r packageVersion("Matrix")`.
+
+Attach packages.
+```{r package}
+library("aster")
+library("numDeriv")
+library("digest")
+library("Matrix")
+```
+
+Need at least version 1.2-2 of R package `aster` for R generic function `vcov`
+to work on results of calls to R functions `aster` and `reaster`.
+```{r aster-version}
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2-2") >= 0)
+```
+
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+# knitr::opts_chunk$set(error=TRUE)
+```
+
+# Data
+
+For the analyses here. the data files are
+```{r data.input}
+load("mf.rda")
+ls()
+sapply(data.primary, class)
+```
+for 
+
+ * Conard Environmental Research Area (CERA),
+
+ * Grey Cloud Dunes Scientific and Natural Area
+
+ * Kellogg-Weaver Dunes, also called McCarthy Lake, and
+
+respectively.  These files include the same data on the same individuals
+as in the data files used by @kulbaba-et-al and @zenodo but also include
+more individuals, who are offspring of those analyzed before.
+For more details, see @kulbaba-et-al.
+
+# Introduction
+
+We do aster (@aster2, @reaster) analyses for an aster model with graph
+$$
+\begin{CD}
+  1 @>\text{Ber}>> \texttt{Germ}
+  @>\text{Ber}>> \texttt{flw}
+  @>\text{Poi}>> \texttt{total.pods}
+  @>\text{samp}>> \texttt{total.pods.collected}
+  @>\text{Poi}>> \texttt{totalseeds}
+\end{CD}
+$$
+where the variables are
+
+ * `Germ` is germination indicator (0 = no, 1 = yes), conditionally Bernoulli.
+
+ * `flw` is survival to flowering (0 = no, 1 = yes),
+    conditionally Bernoulli.
+
+ * `total.pods` is total number of pods produced,
+   conditionally Poisson.
+
+ * `total.pods.collected` is number of pods collected,
+   conditionally Bernoulli (i.e. each pod may be collected or not).
+   The arrow leading to this node
+   is a subsampling arrow.  The number of pods collected is
+   a random sample of the pods produced.
+
+ * `totalseeds` is total number of seeds counted from collected pods,
+   conditionally Poisson.
+
+As always with aster models, the name of the distribution for an arrow
+is the name of the conditional distribution of the successor variable
+given the predecessor variable.
+
+Set graphical model description in R.
+```{r graph}
+vars <- c("Germ", "flw", "total.pods", "total.pods.collected", "totalseeds")
+pred <- c(0, 1, 2, 3, 4)
+fam <- c(1, 1, 2, 1, 2)
+```
+
+# References
+
