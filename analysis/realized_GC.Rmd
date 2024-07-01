@@ -297,6 +297,11 @@ with(subdatfield, length(unique(grandfather)))
 with(subdatfield, unique(grandfather))
 ```
 
+Write out grandfathers.
+```{r write.out.grandfathers}
+save(subdatfield, file = "GC_subdatfield.rda")
+```
+
 ## Reshape Data
 
 Reshape data the way R function `aster` wants it.
@@ -737,6 +742,46 @@ knitr::kable(foo, digits=4)
 ```
 Table \@ref(tab:delta-table-with-se) shows these in a nice table.
 
+# Mean Values (Rather Than Decomposition of DIfferences)
+
+We also want mean values.  This is complicated for offspring in that
+we need to correct for population change due to selection in the generation
+from the parents.  So we repeat the previous analysis with a different
+`doit.combo` function.
+```{r combo-too}
+doit.combo <- function(moo) {
+    stopifnot(is.numeric(moo))
+    stopifnot(is.finite(moo))
+    stopifnot(length(moo) == length(mu.combo))
+    mu.prev <- moo[is.prev]
+    mu.par <- moo[is.par]
+    mu.off <- moo[is.off]
+    idx <- match(sort(unique(subdatfield$grandfather)),
+        levels(subdat$paternalID))
+    mu.bar.prev <- mean(mu.prev)
+    mu.bar.par <- mean(mu.par)
+    mu.bar.off <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx])
+    result <- c(mu.bar.prev, mu.bar.par, mu.bar.off)
+    names(result) <- c(paste("parents", myyear), paste("parents", myyearf),
+        paste("offspring", myyearf))
+    return(result)
+}
+```
+And try this the same way.
+```{r test.combo-too}
+deltas <- doit.combo(mu.combo)
+deltas
+```
+```{r jack.combo-too,cache=TRUE,dependson=c("vcov-prev","vcov-par","vcov-off")}
+<<jack.combo>>
+```
+```{r delta-table-with-se-too, echo=FALSE, tab.cap="Mean Fitness"}
+# note cannot have any dots in chunk label because it screws up caption
+# that is, delta.table is fubar but delta-table is OK
+<<table>>
+knitr::kable(foo, digits=4)
+```
+Table \@ref(tab:delta-table-with-se-too) shows these in a nice table.
 
 # References
 

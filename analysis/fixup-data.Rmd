@@ -42,6 +42,11 @@ This repo is not currently public.
 
 ## Get It
 
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+# knitr::opts_chunk$set(error=TRUE)
+```
+
 For the analyses here. the data files are
 ```{r data.files}
 files <- list.files(pattern = "*.csv")
@@ -60,67 +65,47 @@ as in the data files used by @kulbaba-et-al and @zenodo but also include
 more individuals, who are offspring of those analyzed before.
 For more details, see @kulbaba-et-al.
 
-As can be seen, we have two kinds of files.  Those without
-`"planting_data"` or `"planting.data"`
-as part of their names are the primary data files for the three sites.
-Those with one of these substrings
-in their names are secondary data files used
-to obtain pedigree information for some analyses.
+As can be seen, we have three kinds of files.
+
+ * Those without `"planting"` in their names are the primary data
+   files for the three sites.
+
+ * Those with `"planting_data"` in their names are secondary data files
+   used to obtain pedigree information for some analyses.
+
+ * The one with `"planting.data"` in its name is a similar secondary
+   data file that we will actually not need to use (but can use for checks).
 
 Distinguish these file types.
-(Dot is magic in regular expressions, matches any character.)
 ```{r distinguish}
-files.planting <- grep("planting.data", files, value = TRUE)
-files.primary <- setdiff(files, files.planting)
+files.planting <- grep("planting_data", files, value = TRUE)
+files.primary <- grep("planting", files, value = TRUE, invert = TRUE)
+files.secondary <- files |> setdiff(files.planting) |> setdiff(files.primary)
 files.primary
 files.planting
+files.secondary
 ```
 
 Read in these files.
 ```{r read.data}
-list.names <- substr(files.planting, 1, 2)
-list.names
-data.primary <- data.planting <- list()
-for (i in seq_along(list.names)) {
-    data.primary[[i]] <- read.csv(files.primary[i])
-    data.planting[[i]] <- read.csv(files.planting[i])
-}
-names(data.primary) <- list.names
-names(data.planting) <- list.names
-```
-
-## Enforce Consistency (Tidy)
-
-Now we check that these files have parallel structure.
-```{r data.variables}
-lapply(data.primary, names) |>
-    sapply(function(x) setequal(x, names(data.primary$CS)))
-lapply(data.planting, names) |>
-    sapply(function(x) setequal(x, names(data.planting$CS)))
-foo.primary <- lapply(data.primary, names) |> Reduce(intersect, x = _)
-foo.planting <- lapply(data.planting, names) |> Reduce(intersect, x = _)
-foo.primary
-foo.planting
-```
-
-If we want to perform parallel analyses on these data, then we can only
-use these names.  To assure that we do, we subset the data vertically
-to contain only these variables.
-```{r data.extract.common.variables}
-data.primary <- lapply(data.primary, function(x) x[foo.primary])
-data.planting <- lapply(data.planting, function(x) x[foo.planting])
+data.primary <- lapply(files.primary, read.csv)
+data.planting <- lapply(files.planting, read.csv)
+names(data.primary) <- substr(files.primary, 1, 2) |> toupper()
+names(data.primary)
+names(data.planting) <- substr(files.planting, 1, 2)
+names(data.planting)
 ```
 
 ## Remove Parental ID Zero
 
 Parental ID Zero indicates "unknown" and hence should be removed from
-these analyses.   We have to do this carefully because for
+these analyses.   We have to do this carefully because
 ```{r show.cohort}
 lapply(data.primary, function(x) sort(unique(x$cohort)))
 ```
-individuals in the `"field"` cohort, which were open pollinated, sires
+for individuals in the `"field"` cohort, which were open pollinated, sires
 are unknown and this is not a problem but rather by design.  So we
-only remove individuals with sire unknown and not in cohort `"field"`.
+only remove individuals with sire unknown that are not in cohort `"field"`.
 
 Check how many we are going to remove.  Since operator precedence in R
 is from highest to lowest `==` and `!=` (same level) then `&` and then `|`,
@@ -175,6 +160,8 @@ sapply(data.primary, function(x)
     with(x, all(total.pods.collected <= total.pods)))
 ```
 So this last check fails.
+We will repair in the following section
+(Section \@ref(fix-data-inconsistencies)).
 
 In the following block, `(`some logical expression`) <= (`some other logical
 expression`)` is an R-ism for the [material implication operator](https://en.wikipedia.org/wiki/Material_conditional), that is, left-hand logical expression
@@ -192,6 +179,7 @@ sapply(data.primary, function(x)
 sapply(data.primary, function(x)
     with(x, all((total.pods.collected == 0) <= (totalseeds == 0))))
 ```
+So all of these checks pass.
 
 How many individuals have problems?
 ```{r consistency.check.how.many}
@@ -215,12 +203,58 @@ OK.
 
 # Find Grandfathers
 
+## Introduction
+
 For the `"field"` cohort, we need to find maternal grandfathers (fathers are
-unknown).  Since this is a complicated process, we do a particular example
-in detail before doing all three data frames with functional programming.
+unknown).  This is a complicated process, made even more complicated by having
+to do this three different ways for the three different data sets.
+
+In order for parts of these examples to be easily repeatable, we follow the
+DRY/SPOT rule (Wikipedia articles
+[Don't Repeat Yourself](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)
+and
+[Single Point of Truth](https://en.wikipedia.org/wiki/Single_source_of_truth))
+and define a variable
+```{r dry.spot}
+site <- "GC"
+```
+that says which data set we are working on.
+
+## The GC Data
+
+```{r particular.gc}
+foo <- data.primary[[site]]
+names(foo)
+```
+For these data, `positionID` is the ID of the individual
+(row of the data frame), and `maternalID` is the ID of the maternal plant.
+So the grandfather is the `paternalID` of this maternal plant.
+```{r keys-gc}
+foobar <- with(foo, match(maternalID, positionID))
+```
+R object `foobar` is now the index (row number) of the mother of the
+corresponding individual, that is, the individual in row `i` has their
+mother in row `foobar[i]`.  Hence the father of that mother has ID
+`foo$paternalID[foobar]`.
+```{r grandsires}
+data.primary[[site]] <- transform(data.primary[[site]],
+    grandpaternalID = paternalID[foobar])
+```
+
+## The CS Data
+
+For the other two data sets we do something completely different
+(and, partially, different from each other).
+Reset the DRY/SPOT variable
+```{r dry.spot-too}
+site <- "CS"
+```
+And the data frames (both of them) are
 ```{r particular}
-foo <- data.primary$CS
-bar <- data.planting$CS
+foo <- data.primary[[site]]
+bar <- data.planting[[site]]
+```
+```{r particular-too}
 names(foo)
 names(bar)
 ```
@@ -243,9 +277,10 @@ foobar <- match(foo.key, bar.key)
 all((foo$cohort == "field") <= (! is.na(foobar)))
 ```
 R object `foobar` is now a vector whose length is the row dimension
-of data frame `foo` (which is `data.primary$CS`) and whose values (if not `NA`)
+of data frame `foo` (which is `data.primary[[site]]`) and whose
+values (if not `NA`)
 give the row index of the corresponding individual in data frame `bar`
-(which is `data.planting$CS`).
+(which is `data.planting[[site]]`).
 
 So far, so good.  Now we look up the maternal position.
 ```{r keys-too}
@@ -260,34 +295,120 @@ fooqux <- match(qux.key, foo.key)
 
 And finally, we find the fathers of those mothers.
 ```{r keys-too-too-too}
-grandpaternalID <- with(foo, paternalID[fooqux])
-all((foo$cohort == "field") <= (! is.na(grandpaternalID)))
+data.primary[[site]] <- transform(data.primary[[site]],
+    grandpaternalID = paternalID[fooqux])
+with(data.primary[[site]],
+    all((cohort == "field") <= (! is.na(grandpaternalID))))
 ```
 
-Now we want to do this with a function we can apply to all three data sets.
-```{r keys.function}
-find.grandfathers <- function(foo, bar) {
-   foo.key <- with(foo, paste(row, position, sep = ":"))
-   bar.key <- with(bar, paste(row, position, sep = ":"))
-   baz.key <- with(bar, paste(maternalrow, maternalposition, sep = ":"))
-   foobar <- match(foo.key, bar.key)
-   qux.key <- baz.key[foobar]
-   fooqux <- match(qux.key, foo.key)
-   transform(foo, grandpaternalID = paternalID[fooqux])
-}
+We check that we indeed did what we intended to do.  Find a random
+`"field"` individual.
+```{r random.field}
+i <- sample(which(with(foo, cohort == "field")), 1)
+foo[i, ]
+bar[foobar[i], ]
+foo[fooqux[i], ]
+data.primary[[site]]$grandpaternalID[i]
+stopifnot(foo[i, "row"] == bar[foobar[i], "row.1"])
+stopifnot(foo[i, "position"] == bar[foobar[i], "position.1"])
+stopifnot(bar[foobar[i], "maternalrow"] == foo[fooqux[i], "row"])
+stopifnot(bar[foobar[i], "maternalposition"] == foo[fooqux[i], "position"])
+stopifnot(foo[fooqux[i], "paternalID"] ==
+    data.primary[[site]]$grandpaternalID[i])
 ```
-This function returns data frame `foo` (an argument to the function) with
-an added variable `grandpaternalID`.
-```{r keys.function.apply}
-data.primary <- Map(find.grandfathers, data.primary, data.planting)
+Everything checks (note that because we did not set a random seed, this
+checks for a different random individual every time the file is processed).
+
+## The KW Data
+
+Now we do exactly the same thing for
+```{r dry.spot-too-too}
+site <- "KW"
+```
+Do it.
+```{r redo}
+<<particular>>
+<<keys>>
+<<keys-too>>
+<<keys-too-too>>
+gramps <- with(data.primary[[site]], paternalID[fooqux])
+all((foo$cohort == "field") <= (! is.na(gramps)))
 ```
 
-Check that these agree with old analysis.
+This does not work.  Site KW is not like site CS.
+Find out where the problems are.
+```{r find.out}
+with(foo, year[foo$cohort == "field" & is.na(gramps)]) |> unique()
+with(foo, year[foo$cohort == "field" & (! is.na(gramps))]) |> unique()
+```
+
+It turns out that the grandfathers we have failed to find with the code
+above, are actually in the `paternalID` field for these individuals, that is,
+"paternal" here means maternal grandfathers (which are known) rather than
+fathers (which are unknown).
+```{r find.out.too}
+all(with(foo, paternalID[cohort == "field" & is.na(gramps)]) != 0)
+gramps[foo$cohort == "field" & foo$year == 2017] <-
+    foo$paternalID[foo$cohort == "field" & foo$year == 2017]
+all((foo$cohort == "field") <= (! is.na(gramps)))
+```
+Looks OK.
+```{r kw.gramps}
+data.primary[[site]]$grandpaternalID <- gramps
+```
+
+# Check Agreement with Old Analyses
+
+Check that these agree with old analyses.
 ```{r check.with.old}
 load("KW_subdatfield.rda")
 old <- with(subdatfield, grandfather)
 new <- with(data.primary$KW, grandpaternalID[cohort == "field" & year == 2016])
 identical(as.character(old), as.character(new))
+load("GC_subdatfield.rda")
+old <- with(subdatfield, grandfather)
+new <- with(data.primary$GC, grandpaternalID[cohort == "field" & year == 2016])
+identical(as.character(old), as.character(new))
+```
+
+# Check Agreement with Secondary Data File
+
+```{r secondary.names}
+site
+foo <- data.primary[[site]]
+bar <- read.csv(files.secondary)
+names(bar)
+<<keys>>
+all((foo$cohort == "field" & foo$year == 2017) <= (! is.na(foobar)))
+<<keys-too>>
+<<keys-too-too>>
+all((foo$cohort == "field" & foo$year == 2017) <= (! is.na(qux.key)))
+```
+Now we repeat the checks we did above for the CS data.
+Except now for a 2017 individual
+```{r random.field.too}
+i <- sample(which(with(foo, cohort == "field" & year == 2017)), 1)
+foo[i, ]
+bar[foobar[i], ]
+foo[fooqux[i], ]
+data.primary[[site]]$grandpaternalID[i]
+stopifnot(foo[i, "row"] == bar[foobar[i], "row.1"])
+stopifnot(foo[i, "position"] == bar[foobar[i], "position.1"])
+stopifnot(bar[foobar[i], "maternalrow"] == foo[fooqux[i], "row"])
+stopifnot(bar[foobar[i], "maternalposition"] == foo[fooqux[i], "position"])
+stopifnot(foo[fooqux[i], "paternalID"] ==
+    data.primary[[site]]$grandpaternalID[i])
+```
+So all of that checks too.
+
+# Tidy Data
+
+One more thing do too.
+```{r untidy}
+lapply(data.primary, names)
+common.names <- lapply(data.primary, names) |> Reduce(intersect, x = _)
+common.names
+data.primary <- lapply(data.primary, function(x) x[common.names])
 ```
 
 # Write Out Data
