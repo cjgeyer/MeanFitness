@@ -163,8 +163,8 @@ now totally redundant, telling us nothing the year does not also say.
 In the following code chunk, `"G2YR[23]"` is a regular expression that
 matches either `"G2YR2"` or `"G2YR3"`.
 ```{r fixup-cohort-labels}
-data.primary <- lapply(data.primary,                # DEBUG
-    function(x) transform(x, cohort.orig = cohort)) # DEBUG
+data.primary <- lapply(data.primary, transform, cohort.orig = cohort,
+    paternalID.orig = paternalID, maternalID.orig = maternalID) # DEBUG
 data.primary <- lapply(data.primary,
     function(x) transform(x, cohort = sub("G2YR[23]", "field", cohort)))
 lapply(data.primary, function(x) unique(sort(x$cohort)))
@@ -173,36 +173,49 @@ sapply(data.primary, function(x) with(x, is.na(cohort)) |> sum())
 
 Now `cohort` is consistent between sites.
 
-## Remove Parental ID Zero
+## Convert Parental ID Zero to NA
 
-Parental ID Zero indicates "unknown" and hence should be removed from
-these analyses.   We have to do this carefully because
-for individuals in the `"field"` cohort, which were open pollinated, sires
+Parental ID Zero indicates "unknown" and hence should be converted
+to `NA` to be more R-ish.
+```{r zero-to-na}
+data.primary <- lapply(data.primary, function(x) transform(x,
+    paternalID = ifelse(paternalID == 0, NA_integer_, paternalID),
+    maternalID = ifelse(maternalID == 0, NA_integer_, maternalID)))
+```
+
+## Remove Individuals with Unknown Parents
+
+For individuals in the `"greenhouse"` cohort, which were pedigreed crosses,
+we should have both parents recorded.  Check this.
+```{r na-delete-greenhouse}
+sapply(data.primary, function(x) with(x, cohort == "greenhouse" &
+    (is.na(paternalID) | is.na(maternalID))) |> sum())
+sapply(data.primary, function(x) with(x, cohort == "greenhouse" &
+    is.na(paternalID)) |> sum())
+```
+Remove these individuals.
+```{r na-delete-greenhouse-doit}
+sapply(data.primary, nrow)
+data.primary <- lapply(data.primary, function(x) subset(x,
+    ! (cohort == "greenhouse" & is.na(paternalID))))
+sapply(data.primary, nrow)
+```
+
+For individuals in the `"field"` cohort, which were open pollinated, sires
 are unknown and this is not a problem but rather by design.  So we
 only remove individuals with sire unknown that are not in cohort `"field"`.
-
-Check how many we are going to remove.  Since operator precedence in R
-is from highest to lowest `==` and `!=` (same level) then `&` and then `|`,
-the following does do what is wanted.
-```{r check.parental.zero}
-sapply(data.primary, function(x)
-    sum(with(x, maternalID == 0 | cohort != "field" & paternalID == 0)))
+We do however need to remove individuals whose mothers are unknown.  Check this.
+```{r na-delete-field}
+sapply(data.primary, function(x) with(x,
+    cohort == "field" & is.na(maternalID)) |> sum())
 ```
+
 And do the removal.
-```{r remove.parental.zero}
-data.primary <- lapply(data.primary, function(x)
-    subset(x, ! (maternalID == 0 | cohort != "field" & paternalID == 0)))
-```
-
-## Make Numerical Variables Categorical
-
-Parental ID variables and `block` are numeric (integer).  But statistically
-they are categorical.  So we must make them type `factor` so R will treat
-them correctly.
-```{r to.factor}
-data.primary <- lapply(data.primary, function(x)
-    transform(x, maternalID = as.factor(maternalID),
-    paternalID = as.factor(paternalID), block = as.factor(block)))
+```{r na-delete-field-doit}
+sapply(data.primary, nrow)
+data.primary <- lapply(data.primary, function(x) subset(x,
+    ! (cohort == "field" & is.na(maternalID))))
+sapply(data.primary, nrow)
 ```
 
 ## Check for Data Inconsistencies
@@ -305,7 +318,12 @@ finds grandfathers.  Check that this worked
 with(x, (cohort == "field") <= (! is.na(gramps))) |> all()
 ```
 
-### Method 2 (Only for CS and KW Data)
+Store grandfathers for these data.
+```{r store-grandfathers}
+data.primary[[site]] <- transform(x, grandpaternalID = gramps)
+```
+
+### Method 2 (Only for CS and KW Data and Only for 2017)
 
 ```{r method2-data}
 site <- "CS"
@@ -318,17 +336,15 @@ individuals paternal ID means paternal ID.
 
 ```{r method2-gramps}
 gramps <- with(x, paternalID)
-gramps[x$cohort != "field"] <- NA
-gramps[gramps == 0] <- NA
+gramps[x$cohort != "field"] <- NA_integer_
 ```
 
-We do not expect this to work (have to apply method 3 too).
+Check that this worked.
 ```{r method2-check}
-with(x, mean(is.na(gramps[cohort == "field"])))
+with(x, (cohort == "field" & year == 2017) <= (! is.na(gramps))) |> all()
 ```
-Above should be zero but isn't.
 
-### Method 3 (Only for CS and KW Data)
+### Method 3 (Only for CS and KW Data and Only for 2016)
 
 Still using the same data but now we need both primary and secondary data.
 ```{r method3-data}
@@ -354,177 +370,51 @@ that has row index `i` in the primary data file. And
 ```{r method3-gramps}
 gramps.too <- with(x, paternalID[idx.moms])
 gramps.too[x$cohort != "field"] <- NA
-gramps.too[gramps.too == 0] <- NA
 ```
 looks up the fathers of those mothers.
 
-We do not expect this to work either (have to combine with results of method 2).
+Check that this worked.
 ```{r method3-check}
-with(x, mean(is.na(gramps.too[cohort == "field"])))
-```
-Above should be zero but isn't.
-
-### Checking Consistency and Exhaustiveness of Methods 2 and 3
-
-Check that `gramps` and `gramps.too` say the same thing when not `NA`.
-```{r method.2.3.consist}
-all(gramps == gramps.too, na.rm = TRUE)
-data.frame(method2 = gramps, method3 = gramps.too, cohort = x$cohort.orig,
-    year = x$year) |> subset(gramps != gramps.too)
+with(x, (cohort == "field" & year == 2016) <= (! is.na(gramps.too))) |> all()
 ```
 
-Check that one or the other of `gramps` and `gramps.too` is not `NA`.
-```{r method.2.3.exhaust}
-with(x, (cohort == "field") <= (! is.na(gramps) | (! is.na(gramps.too)))) |> all()
+Store grandfathers for these data.
+```{r store-grandfathers-too}
+data.primary[[site]] <- transform(x,
+    grandpaternalID = ifelse(year == 2017, gramps, gramps.too))
 ```
 
-## The GC Data (REVISED DOWN TO HERE)
+## Redo Methods 2 and 3 for Other Site
 
-```{r particular.gc}
-foo <- data.primary[[site]]
-names(foo)
-```
-For these data, `positionID` is the ID of the individual
-(row of the data frame), and `maternalID` is the ID of the maternal plant.
-So the grandfather is the `paternalID` of this maternal plant.
-```{r keys-gc}
-foobar <- with(foo, match(maternalID, positionID))
-```
-R object `foobar` is now the index (row number) of the mother of the
-corresponding individual, that is, the individual in row `i` has their
-mother in row `foobar[i]`.  Hence the father of that mother has ID
-`foo$paternalID[foobar]`.
-```{r grandsires}
-data.primary[[site]] <- transform(data.primary[[site]],
-    grandpaternalID = paternalID[foobar])
-```
-
-Check that we have grandfathers for all `"field"` individuals
-```{r check-grandsires}
-with(data.primary[[site]],
-     all((cohort == "field") <= (! is.na(grandpaternalID))))
-```
-
-## The CS Data
-
-For the other two data sets we do something completely different
-(and, partially, different from each other).
-Reset the DRY/SPOT variable
-```{r dry.spot-too}
-site <- "CS"
-```
-And the data frames (both of them) are
-```{r particular}
-foo <- data.primary[[site]]
-bar <- data.planting[[site]]
-```
-```{r particular-too}
-names(foo)
-names(bar)
-```
-Variables `"row"` and `"position"` tell where an individual is
-(in both data frames).
-Variables `"maternalrow"` and `"maternalposition"` tell where the mother
-of the corresponding individual is.
-R function `match` allows us to match
-these up, but needs single things to match.  So we paste row and position
-together to make one "key".
-In the check, `<=` is again the [material implication
-operator](https://en.wikipedia.org/wiki/Material_conditional).
-```{r keys}
-foo.key <- with(foo, paste(row, position, sep = ":"))
-bar.key <- with(bar, paste(row, position, sep = ":"))
-baz.key <- with(bar, paste(maternalrow, maternalposition, sep = ":"))
-sort(foo.key) |> head()
-sort(bar.key) |> head()
-foobar <- match(foo.key, bar.key)
-all((foo$cohort == "field") <= (! is.na(foobar)))
-sum(foo$cohort == "field")
-sum(foo$cohort == "field" & is.na(foobar))
-with(foo, unique(year[cohort == "field" & is.na(foobar)]))
-with(foo, unique(year[cohort == "field" & (! is.na(foobar))]))
-with(foo, unique(cohort.orig[cohort == "field" & is.na(foobar)]))
-with(foo, unique(cohort.orig[cohort == "field" & (! is.na(foobar))]))
-```
-R object `foobar` is now a vector whose length is the row dimension
-of data frame `foo` (which is `data.primary[[site]]`) and whose
-values (if not `NA`)
-give the row index of the corresponding individual in data frame `bar`
-(which is `data.planting[[site]]`).
-
-So far, so good.  Now we look up the maternal position.
-```{r keys-too}
-qux.key <- baz.key[foobar]
-all((foo$cohort == "field") <= (! is.na(qux.key)))
-```
-
-Then we find those mothers.
-```{r keys-too-too}
-fooqux <- match(qux.key, foo.key)
-```
-
-And finally, we find the fathers of those mothers.
-```{r keys-too-too-too}
-data.primary[[site]] <- transform(data.primary[[site]],
-    grandpaternalID = paternalID[fooqux])
-with(data.primary[[site]],
-    all((cohort == "field") <= (! is.na(grandpaternalID))))
-```
-
-We check that we indeed did what we intended to do.  Find a random
-`"field"` individual.
-```{r random.field}
-i <- sample(which(with(foo, cohort == "field")), 1)
-foo[i, ]
-bar[foobar[i], ]
-foo[fooqux[i], ]
-data.primary[[site]]$grandpaternalID[i]
-stopifnot(foo[i, "row"] == bar[foobar[i], "row.1"])
-stopifnot(foo[i, "position"] == bar[foobar[i], "position.1"])
-stopifnot(bar[foobar[i], "maternalrow"] == foo[fooqux[i], "row"])
-stopifnot(bar[foobar[i], "maternalposition"] == foo[fooqux[i], "position"])
-stopifnot(foo[fooqux[i], "paternalID"] ==
-    data.primary[[site]]$grandpaternalID[i])
-```
-Everything checks (note that because we did not set a random seed, this
-checks for a different random individual every time the file is processed).
-
-## The KW Data
-
-Now we do exactly the same thing for
-```{r dry.spot-too-too}
+The following code chunk extensively quotes code chunks above,
+but you have to look at the R markdown source to see that.
+```{r method3-data-too}
 site <- "KW"
-```
-Do it.
-```{r redo}
-<<particular>>
-<<keys>>
-<<keys-too>>
-<<keys-too-too>>
-gramps <- with(data.primary[[site]], paternalID[fooqux])
-all((foo$cohort == "field") <= (! is.na(gramps)))
-```
-
-This does not work.  Site KW is not like site CS.
-Find out where the problems are.
-```{r find.out}
-with(foo, year[foo$cohort == "field" & is.na(gramps)]) |> unique()
-with(foo, year[foo$cohort == "field" & (! is.na(gramps))]) |> unique()
+x <- data.primary[[site]]
+y <- data.planting[[site]]
+# method 2
+<<method2-gramps>>
+# method 3
+<<method3-planting>>
+<<method3-mothers>>
+<<method2-check>>
+<<method3-gramps>>
+<<method3-check>>
+# both methods
+<<store-grandfathers-too>>
 ```
 
-It turns out that the grandfathers we have failed to find with the code
-above, are actually in the `paternalID` field for these individuals, that is,
-"paternal" here means maternal grandfathers (which are known) rather than
-fathers (which are unknown).
-```{r find.out.too}
-all(with(foo, paternalID[cohort == "field" & is.na(gramps)]) != 0)
-gramps[foo$cohort == "field" & foo$year == 2017] <-
-    foo$paternalID[foo$cohort == "field" & foo$year == 2017]
-all((foo$cohort == "field") <= (! is.na(gramps)))
-```
-Looks OK.
-```{r kw.gramps}
-data.primary[[site]]$grandpaternalID <- gramps
+# Make Numerical Variables Categorical
+
+Parental ID variables and `block` are numeric (integer).  But statistically
+they are categorical.  So we must make them type `factor` so R will treat
+them correctly.
+```{r to.factor}
+data.primary <- lapply(data.primary, function(x)
+    transform(x, maternalID = as.factor(maternalID),
+    paternalID = as.factor(paternalID),
+    grandpaternalID = as.factor(grandpaternalID),
+    block = as.factor(block)))
 ```
 
 # Check Agreement with Old Analyses
@@ -540,36 +430,6 @@ old <- with(subdatfield, grandfather)
 new <- with(data.primary$GC, grandpaternalID[cohort == "field" & year == 2016])
 identical(as.character(old), as.character(new))
 ```
-
-# Check Agreement with Secondary Data File
-
-```{r secondary.names}
-site
-foo <- data.primary[[site]]
-bar <- read.csv(files.secondary)
-names(bar)
-<<keys>>
-all((foo$cohort == "field" & foo$year == 2017) <= (! is.na(foobar)))
-<<keys-too>>
-<<keys-too-too>>
-all((foo$cohort == "field" & foo$year == 2017) <= (! is.na(qux.key)))
-```
-Now we repeat the checks we did above for the CS data.
-Except now for a 2017 individual
-```{r random.field.too}
-i <- sample(which(with(foo, cohort == "field" & year == 2017)), 1)
-foo[i, ]
-bar[foobar[i], ]
-foo[fooqux[i], ]
-data.primary[[site]]$grandpaternalID[i]
-stopifnot(foo[i, "row"] == bar[foobar[i], "row.1"])
-stopifnot(foo[i, "position"] == bar[foobar[i], "position.1"])
-stopifnot(bar[foobar[i], "maternalrow"] == foo[fooqux[i], "row"])
-stopifnot(bar[foobar[i], "maternalposition"] == foo[fooqux[i], "position"])
-stopifnot(foo[fooqux[i], "paternalID"] ==
-    data.primary[[site]]$grandpaternalID[i])
-```
-So all of that checks too.
 
 # Tidy Data
 
