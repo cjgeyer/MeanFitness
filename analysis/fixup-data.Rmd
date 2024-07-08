@@ -38,13 +38,16 @@ This repo is not currently public.
  * The version of the `bookdown` package used to make this document is
    `r packageVersion("bookdown")`.
 
+ * The version of the `knitr` package used to make this document is
+   `r packageVersion("knitr")`.
+
 # Data
 
-## Get It
+## Data Files
 
 ```{r checkerrors, echo=FALSE}
 # make all code chunks after this one have option error=TRUE
-# knitr::opts_chunk$set(error=TRUE)
+knitr::opts_chunk$set(error=TRUE)
 ```
 
 For the analyses here. the data files are
@@ -52,18 +55,19 @@ For the analyses here. the data files are
 files <- list.files(pattern = "*.csv")
 files
 ```
-for 
+where
 
- * Conard Environmental Research Area (CERA),
+ * CS indicates Conard Environmental Research Area (CERA),
 
- * Grey Cloud Dunes Scientific and Natural Area, and
+ * GC indicates Grey Cloud Dunes Scientific and Natural Area, and
 
- * Kellogg-Weaver Dunes, also called McCarthy Lake,
+ * KW indicates Kellogg-Weaver Dunes, also called McCarthy Lake,
 
 respectively.  These files include the same data on the same individuals
 as in the data files used by @kulbaba-et-al and @zenodo but also include
 more individuals, who are offspring of those analyzed before.
-For more details, see @kulbaba-et-al.
+For more details, see @kulbaba-et-al
+and Section \@ref(rationalize-cohort-labels) below.
 
 As can be seen, we have three kinds of files.
 
@@ -86,7 +90,7 @@ files.planting
 files.secondary
 ```
 
-Read in these files.
+Read in some of these files.
 ```{r read.data}
 data.primary <- lapply(files.primary, read.csv)
 data.planting <- lapply(files.planting, read.csv)
@@ -96,13 +100,83 @@ names(data.planting) <- substr(files.planting, 1, 2)
 names(data.planting)
 ```
 
+## NA Cohort Labels
+
+The variable `cohort` in these data frames tells us what generation
+the data are.
+
+  * `cohort == "greenhouse"` is the first generation planted.  These
+    are pedigreed crosses: both mother and father are known.
+
+  * `cohort %in% c("field", "G2YR2", "G2YR3")` is the second generation
+    planted.  These are open pollinated: mother is known, father is unknown.
+
+  * `cohort == "G3YR2"` is the third generation planted.  We do not analyze
+    these data in this analysis.
+
+But some individuals are not labeled as to cohort.
+```{r show.na.cohort}
+sapply(data.primary, function(x) with(x, sum(is.na(cohort))))
+```
+
+What do these individuals look like?
+```{r show.na.cohort.too}
+lapply(data.primary, function(x) subset(x, is.na(cohort)))
+```
+
+Delete them.
+```{r delete.na.cohort}
+data.primary <- lapply(data.primary, function(x) subset(x, ! is.na(cohort)))
+```
+
+## Rationalize Cohort Labels
+
+As we said above, these data have a variable `cohort` that is inconsistent
+among sites.
+```{r show.cohort}
+lapply(data.primary, function(x) with(x, split(year, cohort)) |> lapply(unique))
+```
+
+ * In site KW, all offspring individuals are labeled as cohort `"field"`.
+
+ * In site CS, offspring in 2016 are labeled as cohort `"field"` and those
+   in 2017 are labeled as cohort `"G2YR3"` for generation 2 year 3
+   apparently because 2017 is the third year of the whole experiment.
+
+ * In site GC, offspring in 2016 are labeled as cohort `"field"` and those
+   in 2017 are labeled as cohort `"G2YR2"` for generation 2 year 2
+   apparently because 2017 is the second year of the experiment *in which
+   offspring were planted*.
+
+ * In site GC, there are also offspring of offspring labeled as cohort
+   `"G3YR2"` for generation 3 year 2.  We do not analyze these individuals
+   in this analysis.  So we omit them from the output file.
+
+Drop the `"G3YR2"` individuals from GC.
+```{r fixup-cohort-subset}
+data.primary <- lapply(data.primary, function(x) subset(x, cohort != "G3YR2"))
+sapply(data.primary, function(x) unique(sort(x$cohort)))
+```
+
+Now convert `"G2YR2"` or `"G2YR3"` to "field".  These labels being
+now totally redundant, telling us nothing the year does not also say.
+In the following code chunk, `"G2YR[23]"` is a regular expression that
+matches either `"G2YR2"` or `"G2YR3"`.
+```{r fixup-cohort-labels}
+data.primary <- lapply(data.primary,                # DEBUG
+    function(x) transform(x, cohort.orig = cohort)) # DEBUG
+data.primary <- lapply(data.primary,
+    function(x) transform(x, cohort = sub("G2YR[23]", "field", cohort)))
+lapply(data.primary, function(x) unique(sort(x$cohort)))
+sapply(data.primary, function(x) with(x, is.na(cohort)) |> sum())
+```
+
+Now `cohort` is consistent between sites.
+
 ## Remove Parental ID Zero
 
 Parental ID Zero indicates "unknown" and hence should be removed from
 these analyses.   We have to do this carefully because
-```{r show.cohort}
-lapply(data.primary, function(x) sort(unique(x$cohort)))
-```
 for individuals in the `"field"` cohort, which were open pollinated, sires
 are unknown and this is not a problem but rather by design.  So we
 only remove individuals with sire unknown that are not in cohort `"field"`.
@@ -207,20 +281,104 @@ OK.
 
 For the `"field"` cohort, we need to find maternal grandfathers (fathers are
 unknown).  This is a complicated process, made even more complicated by having
-to do this three different ways for the three different data sets.
+to do this three different ways.
 
-In order for parts of these examples to be easily repeatable, we follow the
-DRY/SPOT rule (Wikipedia articles
-[Don't Repeat Yourself](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)
-and
-[Single Point of Truth](https://en.wikipedia.org/wiki/Single_source_of_truth))
-and define a variable
-```{r dry.spot}
+### Method 1 (Only for GC Data)
+
+If the dataset has a `positionID` variable, then this identifies
+individuals in the same way that `paternalID` and `maternalID` do,
+that is, if `x` is the data frame
+```{r method1-data}
 site <- "GC"
+x <- data.primary[[site]]
 ```
-that says which data set we are working on.
+then
+```{r method1-idx}
+idx <- with(x, match(maternalID, positionID))
+```
+finds the row indices of mothers of individuals, hence
+```{r method1-gramps}
+gramps <- with(x, paternalID[idx])
+```
+finds grandfathers.  Check that this worked
+```{r method1-check}
+with(x, (cohort == "field") <= (! is.na(gramps))) |> all()
+```
 
-## The GC Data
+### Method 2 (Only for CS and KW Data)
+
+```{r method2-data}
+site <- "CS"
+x <- data.primary[[site]]
+```
+For some individuals `paternalID` (which should be 0 for unknown) the
+grandpaternal ID is actually stored in `paternalID`.  This only makes
+sense for individuals with `cohort == "field"` of course (for other
+individuals paternal ID means paternal ID.
+
+```{r method2-gramps}
+gramps <- with(x, paternalID)
+gramps[x$cohort != "field"] <- NA
+gramps[gramps == 0] <- NA
+```
+
+We do not expect this to work (have to apply method 3 too).
+```{r method2-check}
+with(x, mean(is.na(gramps[cohort == "field"])))
+```
+Above should be zero but isn't.
+
+### Method 3 (Only for CS and KW Data)
+
+Still using the same data but now we need both primary and secondary data.
+```{r method3-data}
+site
+x <- data.primary[[site]]
+y <- data.planting[[site]]
+```
+Now individuals are found by `row` and `position` in both data sets.  So
+```{r method3-planting}
+key.indiv <- with(x, paste(row, position, sep = ":"))
+key.plant <- with(y, paste(row, position, sep = ":"))
+idx <- match(key.indiv, key.plant)
+```
+Now `idx[i]` is the row index in the planting data file of the individual
+that has row index `i` in the primary data file. And
+```{r method3-mothers}
+key.moms <- with(y, paste(maternalrow, maternalposition, sep = ":"))
+idx.moms <- match(key.moms[idx], key.indiv)
+```
+Now `idx.moms[i]` is the row index in the primary data file of the
+the mother of the individual
+that has row index `i` in the primary data file. And
+```{r method3-gramps}
+gramps.too <- with(x, paternalID[idx.moms])
+gramps.too[x$cohort != "field"] <- NA
+gramps.too[gramps.too == 0] <- NA
+```
+looks up the fathers of those mothers.
+
+We do not expect this to work either (have to combine with results of method 2).
+```{r method3-check}
+with(x, mean(is.na(gramps.too[cohort == "field"])))
+```
+Above should be zero but isn't.
+
+### Checking Consistency and Exhaustiveness of Methods 2 and 3
+
+Check that `gramps` and `gramps.too` say the same thing when not `NA`.
+```{r method.2.3.consist}
+all(gramps == gramps.too, na.rm = TRUE)
+data.frame(method2 = gramps, method3 = gramps.too, cohort = x$cohort.orig,
+    year = x$year) |> subset(gramps != gramps.too)
+```
+
+Check that one or the other of `gramps` and `gramps.too` is not `NA`.
+```{r method.2.3.exhaust}
+with(x, (cohort == "field") <= (! is.na(gramps) | (! is.na(gramps.too)))) |> all()
+```
+
+## The GC Data (REVISED DOWN TO HERE)
 
 ```{r particular.gc}
 foo <- data.primary[[site]]
@@ -239,6 +397,12 @@ mother in row `foobar[i]`.  Hence the father of that mother has ID
 ```{r grandsires}
 data.primary[[site]] <- transform(data.primary[[site]],
     grandpaternalID = paternalID[foobar])
+```
+
+Check that we have grandfathers for all `"field"` individuals
+```{r check-grandsires}
+with(data.primary[[site]],
+     all((cohort == "field") <= (! is.na(grandpaternalID))))
 ```
 
 ## The CS Data
@@ -275,6 +439,12 @@ sort(foo.key) |> head()
 sort(bar.key) |> head()
 foobar <- match(foo.key, bar.key)
 all((foo$cohort == "field") <= (! is.na(foobar)))
+sum(foo$cohort == "field")
+sum(foo$cohort == "field" & is.na(foobar))
+with(foo, unique(year[cohort == "field" & is.na(foobar)]))
+with(foo, unique(year[cohort == "field" & (! is.na(foobar))]))
+with(foo, unique(cohort.orig[cohort == "field" & is.na(foobar)]))
+with(foo, unique(cohort.orig[cohort == "field" & (! is.na(foobar))]))
 ```
 R object `foobar` is now a vector whose length is the row dimension
 of data frame `foo` (which is `data.primary[[site]]`) and whose
