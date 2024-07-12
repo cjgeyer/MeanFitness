@@ -87,11 +87,6 @@ to work on results of calls to R functions `aster` and `reaster`.
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2-2") >= 0)
 ```
 
-```{r checkerrors, echo=FALSE}
-# make all code chunks after this one have option error=TRUE
-# knitr::opts_chunk$set(error=TRUE)
-```
-
 # Data
 
 For the analyses here. the data files are
@@ -479,6 +474,77 @@ for (site in names(mu.offspring))
             fftns = delta.fftns, non.fftns = delta.non.fftns)
     }
 mf.decomposition
+```
+
+# Plotting the decomposition
+
+We do one example.  Here `year` is the offspring year.
+```{r plot-site-year}
+site <- "GC"
+year <- "2016"
+year.before <- as.character(as.numeric(year) - 1)
+```
+
+```{r plot-caption,echo=FALSE, results="hide"}
+cap <- paste0("Mean fitness of parents (", year.before, ") and offspring (",
+    year, ") in site ", site, " decomposed into genetic contributions",
+    " described by FFTNS, environmental component, and other genetic",
+    " (residual).  Fitness is expected number of offspring per individual",
+    " (seeds produced per seed sown).")
+```
+```{r plot, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+par(mar = c(1, 4, 0, 0) + 0.1)
+y <- c(mf.parents[[site]][year.before], mf.offspring[[site]][year])
+mfd <- mf.decomposition[[site]][[year]]
+mfd <- mfd[c("fftns", "environmental", "non.fftns")]
+delta <- cumsum(mfd)
+ylim <- y[1] + range(delta)
+ylim
+plot(c(0, 3), y, xlab = "", ylab = "lifetime fitness", pch = 19,
+    col = "blue", axes = FALSE, ylim = ylim)
+box()
+axis(side = 2)
+arrows(x0 = 0, x1 = 3, y0 = y[1], y1 = y[2], col = "blue")
+arrows(x0 = 0:2, x1 = 1:3, y0 = y[1] + c(0, delta[-3]), y1 = y[1] + delta,
+    col = "darkgray")
+# figure out angles of arrows
+# adjust for actual plot, which does not have horizontal and vertical coords
+# equal units
+par.pin <- par("pin")
+par.plt <- par("plt")
+par.usr <- par("usr")
+par.plt <- c(diff(par.plt[1:2]), diff(par.plt[3:4]))
+par.usr <- c(diff(par.usr[1:2]), diff(par.usr[3:4]))
+foo <- par.pin * par.plt / par.usr
+foo
+angles <- atan(mfd * foo[2] / foo[1]) / pi * 180
+angles
+radians <- 2 * pi * angles / 360
+cos(radians)
+sin(radians)
+delta.text <- 0.2
+text(0, y[1] - delta.text / foo[2], "parents", col = "blue", adj = 0)
+text(3, y[2] + delta.text / foo[2], "offspring", col = "blue", adj = 1)
+text(0.5 - sin(radians[1]) * delta.text / foo[1],
+    y[1] + delta[1] / 2 + cos(radians[1]) * delta.text / foo[2],
+    "FFTNS", col = "darkgray", srt = angles[1])
+text(1.5 - sin(radians[2]) * delta.text / foo[1],
+    y[1] + mean(delta[1:2]) + cos(radians[2]) * delta.text / foo[2],
+    "environment", col = "darkgray", srt = angles[2])
+text(2.5 - sin(radians[3]) * delta.text / foo[1],
+    y[1] + mean(delta[2:3]) + cos(radians[3]) * delta.text / foo[2],
+    "residual", col = "darkgray", srt = angles[3])
+```
+
+
+# Standard Errors for These Estimates
+
+Because we did the estimates in two steps, we do the standard errors in
+two steps likewise.
+
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+knitr::opts_chunk$set(error=TRUE)
 ```
 
 # References
