@@ -81,10 +81,15 @@ library("numDeriv")
 library("Matrix")
 ```
 
-Need at least version 1.2-2 of R package `aster` for R generic function `vcov`
+Need at least version 1.2-3 of R package `aster` for R generic function `vcov`
 to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
-stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2-2") >= 0)
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.2-3") >= 0)
+```
+
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+knitr::opts_chunk$set(error=TRUE)
 ```
 
 # Data
@@ -304,6 +309,7 @@ map.factory <- function(rout, is.subsamp, include.random, which.ind) {
         if (! missing(alphabeenu)) {
             stopifnot(is.numeric(alphabeenu))
             stopifnot(is.finite(alphabeenu))
+            stopifnot(length(alphabeenu) == nparm)
             delta.alpha <- alphabeenu[is.alpha]
             delta.bee <- alphabeenu[is.bee]
             fake.beta <- fake.beta + c(delta.alpha, delta.bee[include.random])
@@ -314,7 +320,9 @@ map.factory <- function(rout, is.subsamp, include.random, which.ind) {
         xi <- matrix(pout, ncol = nnode)
         xi <- xi[ , ! is.subsamp, drop = FALSE]
         mu <- apply(xi, 1, prod)
-        return(mu[which.ind])
+        mu <- mu[which.ind]
+        names(mu) <- names(which.ind)
+        return(mu)
     }
 }
 ```
@@ -341,7 +349,8 @@ The arguments of `map.factory` are
    data for the reaster fit we want to use for estimation (when we only
    use sire effects for prediction all individuals with the same sire
    have the same prediction because we have no fixed effects that differ
-   among individuals).
+   among individuals).  `names(which.ind)` is transferred to be the names
+   of the result of the function produced by this function factory.
 
 The value of this function is another function with signature
 ```
@@ -396,14 +405,19 @@ m.dads <- m.dads[ , nnode, ]
 # redefine dads as families of individuals
 stopifnot(as.vector(m.dads) %in% c(0, 1))
 stopifnot(rowSums(m.dads) == 1)
-# tricky, only works because each row of m.dads in indicator vector of family
+# tricky, only works because each row of m.dads is indicator vector of family,
+# so we are multiplying family number by zero or one
 dads <- drop(m.dads %*% as.integer(fams))
 # find one individual in each family
 which.ind <- match(sort(unique(dads)), dads)
 setequal(dads[which.ind], fams)
 ```
+In the following we define another function factory that invokes R function
+`map.factory` defined above to output the function that does estimates.
+This is just tailoring `map.factory`, which is rather generic, to this
+particular analysis.
 ```{r my.fun, error=TRUE}
-my.fun <- function(rout) {
+my.fun.factory <- function(rout) {
     m <- rout$obj$modmat
     nind <- dim(m)[1]
     nnode <- dim(m)[2]
@@ -417,19 +431,20 @@ my.fun <- function(rout) {
     stopifnot(rowSums(m.dads) == 1)
     dads <- drop(m.dads %*% as.integer(fams))
     which.ind <- match(sort(unique(dads)), dads)
-    doit <- map.factory(rout, grepl("collected", vars),
+    names(which.ind) <- dads[which.ind]
+    map.factory(rout, grepl("collected", vars),
         grepl("paternal", names(rout$b)), which.ind)
-    doit() |> structure(names = dads[which.ind])
 }
-mu.parents <- lapply(rout.parents, function(x) lapply(x, my.fun))
-mu.offspring <- lapply(rout.offspring, function(x) lapply(x, my.fun))
+mu.parents <- lapply(rout.parents, function(x)
+    lapply(x, function(y) my.fun.factory(y)()))
+mu.offspring <- lapply(rout.offspring, function(x)
+    lapply(x, function(y) my.fun.factory(y)()))
 ```
 
 ## Mean Fitness for Parental Populations
 
 ```{r mean.fitness}
 mf.parents <- lapply(mu.parents, function(x) sapply(x, mean))
-mf.parents
 ```
 
 ## Mean Fitness for Parental Populations as Expressed in Offspring
@@ -448,7 +463,6 @@ for (site in names(mu.offspring))
         mf.offspring[[site]][year] <-
             sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx])
     }
-mf.offspring
 ```
 
 ## Mean Fitness Differences Decomposed
@@ -478,6 +492,8 @@ mf.decomposition
 
 # Plotting the decomposition
 
+## Figure Without Error Bars, Try One
+
 We do one example.  Here `year` is the offspring year.
 ```{r plot-site-year}
 site <- "GC"
@@ -490,7 +506,8 @@ cap <- paste0("Mean fitness of parents (", year.before, ") and offspring (",
     year, ") in site ", site, " decomposed into genetic contributions",
     " described by FFTNS, environmental component, and other genetic",
     " (residual).  Fitness is expected number of offspring per individual",
-    " (seeds produced per seed sown).")
+    " (seeds produced per seed sown).  Gray arrows add up to blue arrow.",
+    " Horizontal dimension is meaningless.")
 ```
 ```{r plot, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
 par(mar = c(1, 4, 0, 0) + 0.1)
@@ -530,22 +547,124 @@ text(0.5 - sin(radians[1]) * delta.text / foo[1],
     "FFTNS", col = "darkgray", srt = angles[1])
 text(1.5 - sin(radians[2]) * delta.text / foo[1],
     y[1] + mean(delta[1:2]) + cos(radians[2]) * delta.text / foo[2],
-    "environment", col = "darkgray", srt = angles[2])
+    "environmental", col = "darkgray", srt = angles[2])
 text(2.5 - sin(radians[3]) * delta.text / foo[1],
     y[1] + mean(delta[2:3]) + cos(radians[3]) * delta.text / foo[2],
     "residual", col = "darkgray", srt = angles[3])
 ```
+See Figure 1 (code not shown).
 
+## Figure Without Error Bars, Try Two
+
+```{r plotToo, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+par(mar = c(1, 4, 0, 0) + 0.1)
+y <- c(mf.parents[[site]][year.before], mf.offspring[[site]][year])
+mfd <- mf.decomposition[[site]][[year]]
+mfd <- mfd[c("fftns", "environmental", "non.fftns")]
+ylim <- y[1] + range(mfd)
+plot(c(0, 3), y, xlab = "", ylab = "lifetime fitness", pch = 19,
+    col = "blue", axes = FALSE, ylim = ylim)
+box()
+axis(side = 2)
+arrows(x0 = 0, x1 = 3, y0 = y[1], y1 = y[2], col = "blue")
+arrows(x0 = rep(0, 3), x1 = rep(1, 3), y0 = rep(y[1], 3), y1 = y[1] + mfd,
+    col = "darkgray")
+# figure out angles of arrows
+# adjust for actual plot, which does not have horizontal and vertical coords
+# equal units
+par.pin <- par("pin")
+par.plt <- par("plt")
+par.usr <- par("usr")
+par.plt <- c(diff(par.plt[1:2]), diff(par.plt[3:4]))
+par.usr <- c(diff(par.usr[1:2]), diff(par.usr[3:4]))
+foo <- par.pin * par.plt / par.usr
+foo
+angles <- atan(mfd * foo[2] / foo[1]) / pi * 180
+angles
+radians <- 2 * pi * angles / 360
+cos(radians)
+sin(radians)
+delta.text <- 0.2
+text(0.2, y[1] - delta.text / foo[2], "parents", col = "blue", adj = 0)
+text(2.8, y[2] + delta.text / foo[2], "offspring", col = "blue", adj = 1)
+text(0.5 - sin(radians[1]) * delta.text / foo[1],
+    y[1] + delta[1] / 2 + cos(radians[1]) * delta.text / foo[2],
+    "FFTNS", col = "darkgray", srt = angles[1])
+text(0.5 - sin(radians[2]) * delta.text / foo[1],
+    y[1] + mfd["environmental"] / 2 + cos(radians[2]) * delta.text / foo[2],
+    "environmental", col = "darkgray", srt = angles[2])
+text(0.5 - sin(radians[3]) * delta.text / foo[1],
+    y[1] + mfd["non.fftns"] / 2 + cos(radians[3]) * delta.text / foo[2],
+    "residual", col = "darkgray", srt = angles[3])
+```
+See Figure 2 (code not shown).
 
 # Standard Errors for These Estimates
 
 Because we did the estimates in two steps, we do the standard errors in
 two steps likewise.
 
-```{r checkerrors, echo=FALSE}
-# make all code chunks after this one have option error=TRUE
-knitr::opts_chunk$set(error=TRUE)
+## Standard Errors for Individual Mean Fitnesses
+
+Calculate variance-covariance matrix for estimated individual mean fitnesses.
+```{r vcov.mu, cache=TRUE, depends="vcov.reaster.parents"}
+jack.mu.parents <- lapply(rout.parents, function(x) lapply(x, function(y) {
+    my.fun <- my.fun.factory(y)
+    zero <- rep(0, length(y$alpha) + length(y$b) + length(y$nu))
+    jacobian(my.fun, zero)
+}))
+# we have a problem making standard errors in that we cannot for one
+# site-year combo: have to if guard for class "try-error"
+# without SIMPLIFY = FALSE following does not work
+vout.mu.parents <- mapply(jack.mu.parents, vout.parents,
+    SIMPLIFY = FALSE, FUN = function(x, y) {
+    mapply(x, y, SIMPLIFY = FALSE, FUN = function(jack, vout) {
+        if (inherits(vout, "try-error")) {
+            matrix(NaN, nrow(jack), nrow(jack))
+        } else {
+            jack %*% vout %*% t(jack)
+        }
+    })
+})
 ```
+
+Now do the same for offspring.
+```{r vcov.mu.off, cache=TRUE, depends="vcov.reaster.offspring"}
+jack.mu.offspring <- lapply(rout.offspring, function(x) lapply(x, function(y) {
+    my.fun <- my.fun.factory(y)
+    zero <- rep(0, length(y$alpha) + length(y$b) + length(y$nu))
+    jacobian(my.fun, zero)
+}))
+# without SIMPLIFY = FALSE following does not work
+vout.mu.offspring <- mapply(jack.mu.offspring, vout.offspring,
+    SIMPLIFY = FALSE, FUN = function(x, y)
+    mapply(x, y, SIMPLIFY = FALSE, FUN = function(jack, vout)
+        jack %*% vout %*% t(jack))
+)
+```
+
+Check that everything is OK.
+```{r vcov.mu.check}
+lapply(vout.mu.parents, function(x) sapply(x, is.matrix))
+mapply(mu.parents, vout.mu.parents, FUN = function(x, y) {
+    mapply(x, y, FUN = function(mu, vcov) {
+        stopifnot(length(mu) == nrow(vcov))
+        stopifnot(length(mu) == ncol(vcov))
+        TRUE
+    })
+})
+lapply(vout.mu.offspring, function(x) sapply(x, is.matrix))
+mapply(mu.offspring, vout.mu.offspring, FUN = function(x, y) {
+    mapply(x, y, FUN = function(mu, vcov) {
+        stopifnot(length(mu) == nrow(vcov))
+        stopifnot(length(mu) == ncol(vcov))
+        TRUE
+    })
+})
+```
+Looks OK.
+
+## Standard Errors for Changes in Population Mean Fitness and Its Parts
 
 # References
 
