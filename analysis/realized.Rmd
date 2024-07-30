@@ -490,7 +490,7 @@ for (site in names(mu.offspring))
 mf.decomposition
 ```
 
-# Plotting the decomposition
+# Plotting the Decomposition
 
 ## Figure Without Error Bars, Try One
 
@@ -665,6 +665,53 @@ mapply(mu.offspring, vout.mu.offspring, FUN = function(x, y) {
 Looks OK.
 
 ## Standard Errors for Changes in Population Mean Fitness and Its Parts
+
+We proceed as we did in [computing the decomposition of differences in
+mean fitness above](#mean-fitness-differences-decomposed),
+except now we have to create one R function to do the
+job, which we then differentiate by numerical differentiation.
+```{r se.mean.fitness.decomposition}
+se.mf.decomposition <- list()
+for (site in names(mu.offspring))
+    for (year in names(mu.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        mu.prev <- mu.parents[[site]][[year.before]]
+        mu.par <- mu.parents[[site]][[year]]
+        stopifnot(names(mu.prev) == names(mu.par))
+        mu.off <- mu.offspring[[site]][[year]]
+        idx <- match(names(mu.off), names(mu.prev))
+        mu.combo <- c(mu.prev, mu.par, mu.off)
+        is.prev <- seq_along(mu.combo) %in% seq_along(mu.prev)
+        is.par <- seq_along(mu.combo) %in% (length(mu.prev) + seq_along(mu.par))
+        is.off <- ! (is.prev | is.par)
+        doit <- function(moo) {
+            stopifnot(is.numeric(moo))
+            stopifnot(is.finite(moo))
+            stopifnot(length(moo) == length(mu.combo))
+            mu.prev <- moo[is.prev]
+            mu.par <- moo[is.par]
+            mu.off <- moo[is.off]
+            delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) -
+                mean(mu.prev)
+            delta.environ <- mean(mu.par - mu.prev)
+            delta.fftns <-
+                sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.prev)
+            delta.non.fftns <- delta.total - delta.environ - delta.fftns
+            c(total = delta.total, environmental = delta.environ,
+                fftns = delta.fftns, non.fftns = delta.non.fftns)
+        }
+        foo <- doit(mu.combo)
+        stopifnot(identical(mf.decomposition[[site]][[year]], foo))
+        jack.combo <- jacobian(doit, mu.combo)
+        vcov.combo <- bdiag(vout.mu.parents[[site]][[year.before]],
+            vout.mu.parents[[site]][[year]], vout.mu.offspring[[site]][[year]])
+        result <- jack.combo %*% vcov.combo %*% t(jack.combo)
+        result <- diag(result)
+        names(result) <- names(foo)
+        se.mf.decomposition[[site]][[year]] <- result
+    }
+se.mf.decomposition
+```
 
 # References
 
