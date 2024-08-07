@@ -55,6 +55,10 @@ This work is licensed under a Creative Commons
 CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 (https://creativecommons.org/publicdomain/zero/1.0/).
 
+The R markdown source for this document is the file `realized.Rmd`
+in the GitHub private repository https://github.com/cjgeyer/mf
+which will be made public whenever a paper based on it is submitted.
+
 # R
 
  * The version of R used to make this document is `r getRversion()`.
@@ -711,6 +715,37 @@ for (site in names(mu.offspring))
         se.mf.decomposition[[site]][[year]] <- result
     }
 se.mf.decomposition
+```
+
+# Zero Observed Fitness
+
+```{r foobaz}
+years <- sort(unique(data.primary[[1]]$year))
+names(years) <- years
+years
+lapply(data.primary, function(x) lapply(years, function(y) {
+    subset(x, year == y & cohort == "greenhouse") |>
+    with(split(totalseeds, paternalID)) |> sapply(sum)
+}))
+lapply(data.primary, function(x) lapply(years, function(y) {
+    subset(x, year == y & cohort == "field") |>
+    with(split(totalseeds, grandpaternalID)) |> sapply(sum)
+}))
+lapply(mu.parents, function(x) lapply(x, names))
+lapply(mu.offspring, function(x) lapply(x, names))
+mu.parents$CS[["2015"]]
+mu.offspring$CS[["2016"]]
+for (site in names(mu.offspring))
+    for (year in names(mu.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        mu.prev <- mu.parents[[site]][[year.before]]
+        mu.par <- mu.parents[[site]][[year]]
+        stopifnot(names(mu.prev) == names(mu.par))
+        mu.off <- mu.offspring[[site]][[year]]
+        idx <- match(names(mu.prev), names(mu.off))
+        cat("site =", site, ", year =", year, "\n")
+        print(names(mu.prev)[is.na(idx)])
+}
 ```
 
 # References

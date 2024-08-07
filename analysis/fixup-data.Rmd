@@ -417,6 +417,47 @@ data.primary <- lapply(data.primary, function(x)
     block = as.factor(block)))
 ```
 
+# One More Data Inconsistency to Deal With
+
+```{r planting}
+sites <- names(data.primary)
+sites
+years <- with(data.primary[[1]], year[cohort == "field"] |> sort() |> unique())
+years
+```
+
+It is a scientific inconsistency that parents had viable seeds but no
+seeds were planted.  We need to deal with that.  How large is the problem.
+```{r planting.too}
+foo <- list()
+for (site in sites) {
+    x <- data.primary[[site]]
+    my.result <- NULL
+    for (year in years) {
+        year.before <- as.character(as.numeric(year) - 1)
+        x.prev <- subset(x, cohort == "greenhouse" & year == year.before)
+        x.off <- subset(x, cohort == "field" & year == year)
+        pas <- x.prev$paternalID
+        grampas <- x.off$grandpaternalID
+        oopsie <- setdiff(pas, grampas)
+        result <- x.prev$totalseeds
+        names(result) <- pas
+        result <- result[names(result) %in% oopsie]
+        result <- split(result, names(result))
+        result <- sapply(result, sum)
+        if (length(result) == 0) result <- double(0)
+        result <- result[order(as.numeric(names(result)))]
+        foo[[site]][[year.before]] <- result
+    }
+}
+foo
+```
+In the code chunk above R object `foo` gives total seed counts for `paternalID`
+for which no seeds were planted in the following year.
+This seems unproblematic for sites `CS` and `KW` but seems hard to explain
+for site `GC`.  Why were no seeds planted when hundreds of viable seeds
+were recorded?
+
 # Check Agreement with Old Analyses
 
 Check that these agree with old analyses.
