@@ -458,6 +458,12 @@ This seems unproblematic for sites `CS` and `KW` but seems hard to explain
 for site `GC`.  Why were no seeds planted when hundreds of viable seeds
 were recorded?
 
+Also why exactly the same both years?   Shouldn't this be random?
+```{r same-o-same-o}
+all(names(foo$GS[["2015"]]) == names(foo$GS[["2015"]]))
+all(names(foo$KW[["2015"]]) == names(foo$KW[["2015"]]))
+```
+
 # Check Agreement with Old Analyses
 
 Check that these agree with old analyses.
