@@ -464,6 +464,22 @@ all(names(foo$GS[["2015"]]) == names(foo$GS[["2015"]]))
 all(names(foo$KW[["2015"]]) == names(foo$KW[["2015"]]))
 ```
 
+How many grandfathers?
+```{r how}
+years
+foo <- list()
+for (site in sites) {
+    x <- data.primary[[site]]
+    for (year in years) {
+        x.off <- subset(x, cohort == "field" & year == year)
+        grampas <- x.off$grandpaternalID
+        grampas <- as.vector(sort(unique(grampas)))
+        foo[[site]][[as.character(year)]] <- grampas
+    }
+}
+foo
+```
+
 # Check Agreement with Old Analyses
 
 Check that these agree with old analyses.
