@@ -15,6 +15,5 @@ realized_KW.pdf KW_subdatfield.rda : realized_KW.Rmd ${BIB_FILES}
 realized_CS.pdf : realized_CS.Rmd ${BIB_FILES}
 	Rscript -e 'rmarkdown::render("realized_CS.Rmd")'
 
-fixup-data.pdf mf.rda : fixup-data.Rmd ${CSV_FILES} ${BIB_FILES} \
-    KW_subdatfield.rda GC_subdatfield.rda
+fixup-data.pdf mf.rda : fixup-data.Rmd ${CSV_FILES} ${BIB_FILES}
 	Rscript -e 'rmarkdown::render("fixup-data.Rmd")'

@@ -294,114 +294,58 @@ OK.
 
 For the `"field"` cohort, we need to find maternal grandfathers (fathers are
 unknown).  This is a complicated process, made even more complicated by having
-to do this three different ways.
+to do this two different ways.
 
-### Method 1 (Only for GC Data)
+## Method 1 (Only for 2017)
 
-If the dataset has a `positionID` variable, then this identifies
-individuals in the same way that `paternalID` and `maternalID` do,
-that is, if `x` is the data frame
-```{r method1-data}
-site <- "GC"
-x <- data.primary[[site]]
-```
-then
-```{r method1-idx}
-idx <- with(x, match(maternalID, positionID))
-```
-finds the row indices of mothers of individuals, hence
-```{r method1-gramps}
-gramps <- with(x, paternalID[idx])
-```
-finds grandfathers.  Check that this worked
-```{r method1-check}
-with(x, (cohort == "field") <= (! is.na(gramps))) |> all()
-```
-
-Store grandfathers for these data.
-```{r store-grandfathers}
-data.primary[[site]] <- transform(x, grandpaternalID = gramps)
-```
-
-### Method 2 (Only for CS and KW Data and Only for 2017)
-
-```{r method2-data}
-site <- "CS"
-x <- data.primary[[site]]
-```
-For some individuals `paternalID` (which should be 0 for unknown) the
-grandpaternal ID is actually stored in `paternalID`.  This only makes
+For offspring (`"field"`) planted in 2017, the father is unknown but
+that variable stores the maternal grandfather (rather than the unknown
+indicator).  This only makes
 sense for individuals with `cohort == "field"` of course (for other
 individuals paternal ID means paternal ID.
-
-```{r method2-gramps}
-gramps <- with(x, paternalID)
-gramps[x$cohort != "field"] <- NA_integer_
+Thus we get grandfathers as follows.
+```{r method1}
+data.primary <- lapply(data.primary, function(x) transform(x,
+    grandpaternalID = ifelse(cohort == "field" & year == 2017,
+        paternalID, NA_integer_)))
 ```
 
-Check that this worked.
-```{r method2-check}
-with(x, (cohort == "field" & year == 2017) <= (! is.na(gramps))) |> all()
-```
+## Method 2 (Only for 2016)
 
-### Method 3 (Only for CS and KW Data and Only for 2016)
+For offspring (`"field"`) planted in 2016, we need a much more complicated
+method to find maternal grandfathers.
+
+ * The primary data file says where the individual was planted
+   (variables `position` and `row`).
+
+ * The planting data file finds that same individual by those same variables
+   (`position` and `row`).
+
+ * The planting data file gives for that individual where its mother was
+   planted (variables `maternalposition` and `maternalrow`).
+
+ * If we look up up the mother in the primary data file (by position
+   and row), then the `paternalID` for that mother is the required grandfather.
 
 Still using the same data but now we need both primary and secondary data.
-```{r method3-data}
-site
-x <- data.primary[[site]]
-y <- data.planting[[site]]
-```
-Now individuals are found by `row` and `position` in both data sets.  So
-```{r method3-planting}
-key.indiv <- with(x, paste(row, position, sep = ":"))
-key.plant <- with(y, paste(row, position, sep = ":"))
-idx <- match(key.indiv, key.plant)
-```
-Now `idx[i]` is the row index in the planting data file of the individual
-that has row index `i` in the primary data file. And
-```{r method3-mothers}
-key.moms <- with(y, paste(maternalrow, maternalposition, sep = ":"))
-idx.moms <- match(key.moms[idx], key.indiv)
-```
-Now `idx.moms[i]` is the row index in the primary data file of the
-the mother of the individual
-that has row index `i` in the primary data file. And
-```{r method3-gramps}
-gramps.too <- with(x, paternalID[idx.moms])
-gramps.too[x$cohort != "field"] <- NA
-```
-looks up the fathers of those mothers.
-
-Check that this worked.
-```{r method3-check}
-with(x, (cohort == "field" & year == 2016) <= (! is.na(gramps.too))) |> all()
-```
-
-Store grandfathers for these data.
-```{r store-grandfathers-too}
-data.primary[[site]] <- transform(x,
-    grandpaternalID = ifelse(year == 2017, gramps, gramps.too))
-```
-
-## Redo Methods 2 and 3 for Other Site
-
-The following code chunk extensively quotes code chunks above,
-but you have to look at the R markdown source to see that.
-```{r method3-data-too}
-site <- "KW"
-x <- data.primary[[site]]
-y <- data.planting[[site]]
-# method 2
-<<method2-gramps>>
-# method 3
-<<method3-planting>>
-<<method3-mothers>>
-<<method2-check>>
-<<method3-gramps>>
-<<method3-check>>
-# both methods
-<<store-grandfathers-too>>
+```{r method2}
+sites <- names(data.primary)
+for (site in sites) {
+    x <- data.primary[[site]]
+    y <- data.planting[[site]]
+    key.indiv <- with(x, paste(row, position, sep = ":"))
+    key.plant <- with(y, paste(row, position, sep = ":"))
+    idx <- match(key.indiv, key.plant)
+    # now idx[i] is row index in planting data file of individual
+    # having row index i in primary data file
+    key.moms <- with(y, paste(maternalrow, maternalposition, sep = ":"))
+    idx.moms <- match(key.moms[idx], key.indiv)
+    # now idx.moms[i] is row index in primary data file of mother
+    # of individual having row index i in primary data file
+    data.primary[[site]] <- transform(x, grandpaternalID =
+        ifelse(cohort == "field" & year == 2016,
+             paternalID[idx.moms], grandpaternalID))
+}
 ```
 
 # Make Numerical Variables Categorical
@@ -415,83 +359,6 @@ data.primary <- lapply(data.primary, function(x)
     paternalID = as.factor(paternalID),
     grandpaternalID = as.factor(grandpaternalID),
     block = as.factor(block)))
-```
-
-# One More Data Inconsistency to Deal With
-
-```{r planting}
-sites <- names(data.primary)
-sites
-years <- with(data.primary[[1]], year[cohort == "field"] |> sort() |> unique())
-years
-```
-
-It is a scientific inconsistency that parents had viable seeds but no
-seeds were planted.  We need to deal with that.  How large is the problem.
-```{r planting.too}
-foo <- list()
-for (site in sites) {
-    x <- data.primary[[site]]
-    my.result <- NULL
-    for (year in years) {
-        year.before <- as.character(as.numeric(year) - 1)
-        x.prev <- subset(x, cohort == "greenhouse" & year == year.before)
-        x.off <- subset(x, cohort == "field" & year == year)
-        pas <- x.prev$paternalID
-        grampas <- x.off$grandpaternalID
-        oopsie <- setdiff(pas, grampas)
-        result <- x.prev$totalseeds
-        names(result) <- pas
-        result <- result[names(result) %in% oopsie]
-        result <- split(result, names(result))
-        result <- sapply(result, sum)
-        if (length(result) == 0) result <- double(0)
-        result <- result[order(as.numeric(names(result)))]
-        foo[[site]][[year.before]] <- result
-    }
-}
-foo
-```
-In the code chunk above R object `foo` gives total seed counts for `paternalID`
-for which no seeds were planted in the following year.
-This seems unproblematic for sites `CS` and `KW` but seems hard to explain
-for site `GC`.  Why were no seeds planted when hundreds of viable seeds
-were recorded?
-
-Also why exactly the same both years?   Shouldn't this be random?
-```{r same-o-same-o}
-all(names(foo$GS[["2015"]]) == names(foo$GS[["2015"]]))
-all(names(foo$KW[["2015"]]) == names(foo$KW[["2015"]]))
-```
-
-How many grandfathers?
-```{r how}
-years
-foo <- list()
-for (site in sites) {
-    x <- data.primary[[site]]
-    for (year in years) {
-        x.off <- subset(x, cohort == "field" & year == year)
-        grampas <- x.off$grandpaternalID
-        grampas <- as.vector(sort(unique(grampas)))
-        foo[[site]][[as.character(year)]] <- grampas
-    }
-}
-foo
-```
-
-# Check Agreement with Old Analyses
-
-Check that these agree with old analyses.
-```{r check.with.old}
-load("KW_subdatfield.rda")
-old <- with(subdatfield, grandfather)
-new <- with(data.primary$KW, grandpaternalID[cohort == "field" & year == 2016])
-identical(as.character(old), as.character(new))
-load("GC_subdatfield.rda")
-old <- with(subdatfield, grandfather)
-new <- with(data.primary$GC, grandpaternalID[cohort == "field" & year == 2016])
-identical(as.character(old), as.character(new))
 ```
 
 # Tidy Data
