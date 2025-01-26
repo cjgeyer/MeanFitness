@@ -17,3 +17,10 @@ realized_CS.pdf : realized_CS.Rmd ${BIB_FILES}
 
 fixup-data.pdf mf.rda : fixup-data.Rmd ${CSV_FILES} ${BIB_FILES}
 	Rscript -e 'rmarkdown::render("fixup-data.Rmd")'
+
+objfun.pdf : mf.rda objfun.Rmd ${BIB_FILES}
+	Rscript -e 'rmarkdown::render("objfun.Rmd")'
+
+objfun_CS_2015.pdf : mf.rda objfun_CS_2015.Rmd ${BIB_FILES}
+	Rscript -e 'rmarkdown::render("objfun_CS_2015.Rmd")'
+

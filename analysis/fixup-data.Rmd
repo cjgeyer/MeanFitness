@@ -218,6 +218,15 @@ data.primary <- lapply(data.primary, function(x) subset(x,
 sapply(data.primary, nrow)
 ```
 
+## Final Check for Unknown Parents
+
+```{r check-parents-final}
+sapply(data.primary, function(x) with(x, cohort == "greenhouse" &
+    (is.na(paternalID) | is.na(maternalID))) |> sum())
+sapply(data.primary, function(x) with(x, cohort == "field" &
+    is.na(maternalID)) |> sum())
+```
+
 ## Check for Data Inconsistencies
 
 The aster graph for these data is
@@ -299,8 +308,8 @@ to do this two different ways.
 ## Method 1 (Only for 2017)
 
 For offspring (`"field"`) planted in 2017, the father is unknown but
-that variable stores the maternal grandfather (rather than the unknown
-indicator).  This only makes
+the variable `paternalID` stores the maternal grandfather
+(rather than the unknown indicator).  This only makes
 sense for individuals with `cohort == "field"` of course (for other
 individuals paternal ID means paternal ID.
 Thus we get grandfathers as follows.
@@ -346,6 +355,31 @@ for (site in sites) {
         ifelse(cohort == "field" & year == 2016,
              paternalID[idx.moms], grandpaternalID))
 }
+```
+
+## Check Grandfathers
+
+```{r grandfather-check}
+sapply(data.primary, function(x)
+    with(x, sum(cohort == "field" & is.na(grandpaternalID))))
+```
+Oops!
+```{r grandfather-check-too}
+sapply(data.primary, function(x)
+    with(x, year[cohort == "field" & is.na(grandpaternalID)]))
+```
+Who are you?
+```{r grandfather-check-too-too}
+subset(data.primary$GC, cohort == "field" & is.na(grandpaternalID))
+```
+
+These individuals are misclassified as to
+"cohort".  They are actually generation 3 and should be removed.
+This is proved by the planting data file for 2016, which is not
+available in this repo.
+```{r grandfather-fixup}
+data.primary$GC <- subset(data.primary$GC,
+    ! (cohort == "field" & is.na(grandpaternalID)))
 ```
 
 # Make Numerical Variables Categorical

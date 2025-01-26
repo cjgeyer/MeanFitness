@@ -1,0 +1,887 @@
+---
+title: "Estimates of Realized Response to Selection in *Chamaecrista fasciculata* and Decomposition into Environmental and Genetic Parts"
+author:
+  - "Mason W. Kulbaba^[St. Mary's University, mason.kulbaba@stmu.ca, https://orcid.org/0000-0003-0619-7089]"
+  - "Seema N. Sheth^[Department of Plant and Microbial Biology, North Carolina State University, ssheth3@ncsu.edu, https://orcid.org/0000-0001-8284-7608]"
+  - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
+  - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
+  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
+  - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    extra_dependencies: "amscd"
+    number_sections: true
+    toc: true
+    toc_depth: 3
+linkcolor: blue
+urlcolor: blue
+bibliography: foo.bib
+csl: journal-of-the-royal-statistical-society.csl
+link-citations: true
+---
+
+# Abstract {-}
+
+This work builds on @kulbaba-et-al and the correction to it [@zenodo]
+to obtain estimates of the realized response to natural selection.
+Those articles
+presented estimates of mean fitness and additive genetic variance for fitness
+for three populations of *Chamaecrista fasciculata*,
+each grown in its home location in three years via aster analyses
+of records of components of fitness for a pedigreed set of individuals.
+Here, we consider the realized change in mean fitness from one generation
+to the next, for comparison with the prediction from Fisher's
+Fundamental Theorem of Natural Selection (FFTNS).
+We divide change in mean fitness in one generation
+into three parts:
+that due to change in genetic composition described by FFTNS,
+that due to change in genetic composition not described by FFTNS, and
+that due to change in environment.
+Here, we obtain estimates of a) mean fitness of the pedigreed parental
+populations before selection (previously presented in @kulbaba-et-al and its
+correction); b) mean fitness of the pedigreed parental population after
+selection (i.e. accounting for the change in representation of the families
+reflected in differential seed production); and mean fitness of the offspring
+of the pedigreed sets
+(i. e., the outcome of natural selection on the parental
+generation when grown in the same sites in the following year).
+
+We also obtain standard errors of our estimates.
+In this we use a new scheme that treats random effects as parameters
+to estimate because we do use estimates of random effects in our estimates
+of mean fitness.
+
+# License
+
+This work is licensed under a Creative Commons
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The R markdown source for this document is the file `realized.Rmd`
+in the GitHub private repository https://github.com/cjgeyer/mf
+which will be made public whenever a paper based on it is submitted.
+
+# R
+
+ * The version of R used to make this document is `r getRversion()`.
+
+ * The version of the `rmarkdown` package used to make this document is
+   `r packageVersion("rmarkdown")`.
+
+ * The version of the `bookdown` package used to make this document is
+   `r packageVersion("bookdown")`.
+
+ * The version of the `aster` package used to make this document is
+   `r packageVersion("aster")`.
+
+ * The version of the `numDeriv` package used to make this document is
+   `r packageVersion("numDeriv")`.
+
+ * The version of the `Matrix` package used to make this document is
+   `r packageVersion("Matrix")`.
+
+ * The version of the `parallel` package used to make this document is
+   `r packageVersion("parallel")`.
+
+Attach packages.
+```{r package}
+library("aster")
+library("numDeriv")
+library("Matrix")
+library("parallel")
+options("mc.cores" = detectCores())
+```
+
+Need at least version 1.3 of R package `aster` for R generic function `vcov`
+to work on results of calls to R functions `aster` and `reaster`.
+```{r aster-version}
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3") >= 0)
+```
+
+```{r checkerrors, echo=FALSE}
+# make all code chunks after this one have option error=TRUE
+knitr::opts_chunk$set(error=TRUE)
+```
+
+# Data
+
+## Files
+
+For the analyses here. the data files are
+```{r data.input}
+load("mf.rda")
+ls()
+sapply(data.primary, class)
+```
+for 
+
+ * Conard Environmental Research Area (CERA),
+
+ * Grey Cloud Dunes Scientific and Natural Area, and
+
+ * Kellogg-Weaver Dunes, also called McCarthy Lake,
+
+respectively.  These files include the same data on the same individuals
+as in the data files used by @kulbaba-et-al and @zenodo but also include
+more individuals, who are offspring of those analyzed before.
+For more details, see @kulbaba-et-al.
+
+Much preprocessing of these data has already been done.  See
+the file `fixup-data.pdf` in this repository.
+
+## Structure
+
+We do aster analyses with random effects (@aster2, @reaster) for
+an aster model with graph
+$$
+\begin{CD}
+  1 @>\text{Ber}>> \texttt{Germ}
+  @>\text{Ber}>> \texttt{flw}
+  @>\text{Poi}>> \texttt{total.pods}
+  @>\text{samp}>> \texttt{total.pods.collected}
+  @>\text{Poi}>> \texttt{totalseeds}
+\end{CD}
+$$
+where the variables are
+
+ * `Germ` is germination indicator (0 = no, 1 = yes), conditionally Bernoulli.
+
+ * `flw` is survival to flowering (0 = no, 1 = yes),
+    conditionally Bernoulli.
+
+ * `total.pods` is total number of pods produced,
+   conditionally Poisson.
+
+ * `total.pods.collected` is number of pods collected,
+   conditionally Bernoulli (i.e. each pod may be collected or not).
+   The arrow leading to this node
+   is a subsampling arrow.  The number of pods collected is
+   a random sample of the pods produced.
+
+ * `totalseeds` is total number of seeds counted from collected pods,
+   conditionally Poisson.
+
+As always with aster models, the name of the distribution for an arrow
+is the name of the conditional distribution of the successor variable
+given the predecessor variable.
+The arrow labeled `samp` is a subsampling arrow.  It is a Bernoulli
+arrow but the sampling is experimental rather than biological.
+
+Set graphical model description in R.
+```{r graph}
+vars <- c("Germ", "flw", "total.pods", "total.pods.collected", "totalseeds")
+pred <- c(0, 1, 2, 3, 4)
+fam <- c(1, 1, 2, 1, 2)
+```
+
+```{r key.gc, echo=FALSE}
+key.data <- tools::md5sum("mf.rda")
+```
+
+# Analyses with R Function Reaster
+
+## Parents
+
+We have nine analyses to do here, one for each site-year combination.
+
+We have three covariates: sire, dam, and block, which we make random effects.
+We `cbind` the model matrices for sire and dam, so they share a variance
+component.
+```{r reaster.parents, cache=TRUE, cache.extra=key.data}
+years <- sort(unique(data.primary[[1]]$year))
+names(years) <- years
+years
+rout.parents <- mclapply(data.primary, function(x) mclapply(years, function(y) {
+    subdat <- subset(x, year == y & cohort == "greenhouse")
+    subdat <- droplevels(subdat)
+    redata <- reshape(subdat, varying = list(vars), direction = "long",
+        timevar = "varb", times = as.factor(vars), v.names = "resp")
+    redata <- transform(redata,
+        fit = as.numeric(grepl("totalseeds", as.character(varb))),
+        root = 1)
+    modmat.sire <- model.matrix(~ 0 + fit:paternalID, redata)
+    modmat.dam <- model.matrix(~ 0 + fit:maternalID, redata)
+    modmat.siredam <- cbind(modmat.sire, modmat.dam)
+    reaster(resp ~ fit + varb,
+        list(parental=~0 + modmat.siredam, block = ~ 0 + fit:block),
+        pred, fam, varb, id, root, data = redata)
+    }))
+```
+
+Check what we got.
+```{r quid.est.happening}
+sapply(rout.parents, class)
+lapply(rout.parents, names)
+lapply(rout.parents, function(x) sapply(x, function(x) inherits(x, "reaster")))
+```
+
+Summaries.
+```{r summary.reaster.parents, cache=TRUE, depends="reaster.parents"}
+sout.parents <- lapply(rout.parents, function(x) lapply(x, summary))
+```
+```{r quid.est.happening.too}
+lapply(sout.parents, function(x)
+    sapply(x, function(x) inherits(x, "summary.reaster")))
+lapply(sout.parents, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
+```
+
+Check that variance-covariance calculation also works.
+```{r vcov.reaster.parents, cache=TRUE, depends="reaster.parents"}
+vout.parents <- mclapply(rout.parents, function(x)
+    mclapply(x, function(x) try(vcov(x, standard.deviation = FALSE,
+        re.too = TRUE, complete = TRUE), silent = TRUE)))
+```
+
+Check that we got no errors (`TRUE` means no error).
+```{r quid.est.happening.too.too}
+lapply(vout.parents, function(x) sapply(x, function(x)
+    ! inherits(x, "try-error")))
+```
+Oops!  No standard errors for CS 2015 and KW 2015.  We will fix this up
+[later](#fixup-random-effects-aster-estimates).
+
+## Offspring
+
+We have six analyses to do here, one for each site-year combination.
+```{r reaster.offspring, cache=TRUE, cache.extra=key.data}
+years <- with(data.primary[[1]], year[cohort == "field"]) |> sort() |> unique()
+names(years) <- years
+years
+rout.offspring <- mclapply(data.primary,
+    function(x) mclapply(years, function(y) {
+    subdat <- subset(x, year == y & cohort == "field")
+    subdat <- droplevels(subdat)
+    redata <- reshape(subdat, varying = list(vars), direction = "long",
+        timevar = "varb", times = as.factor(vars), v.names = "resp")
+    redata <- transform(redata,
+        fit = as.numeric(grepl("totalseeds", as.character(varb))),
+        root = 1)
+    reaster(resp ~ fit + varb,
+        list(parental = ~ 0 + fit:grandpaternalID, block = ~ 0 + fit:block),
+        pred, fam, varb, id, root, data = redata)
+    }))
+```
+Summaries.
+```{r summary.reaster.offspring, cache=TRUE, depends="reaster.offspring"}
+sout.offspring <- mclapply(rout.offspring, function(x) mclapply(x, summary))
+```
+Estimates of variance components.
+```{r quid.est.happening.too.too.too}
+lapply(sout.offspring, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
+```
+
+Check that variance-covariance calculation also works.
+```{r vcov.reaster.offspring, cache=TRUE, depends="reaster.offspring"}
+vout.offspring <- mclapply(rout.offspring, function(x)
+    mclapply(x, function(x) try(vcov(x, standard.deviation = FALSE,
+        re.too = TRUE, complete = TRUE), silent = TRUE)))
+```
+
+Check that we got no errors (`TRUE` means no error).
+```{r quid.est.happening.too.too.off}
+lapply(vout.offspring, function(x) sapply(x, function(x)
+    ! inherits(x, "try-error")))
+```
+
+# Fixup Random Effects Aster Estimates
+
+Version 1.3 of R package `aster` has a new function `objfun.factory` that
+makes the objective function for an aster model with random effects
+(the Laplace approximation for minus the log likelihood).  We feed that
+to R function `nlm` to minimize to improve estimates.
+```{r fixup.reaster}
+fixup <- function(rout) {
+    stopifnot(inherits(rout, "reaster"))
+    objfun <- objfun.factory(rout$fixed, rout$random, rout$response,
+        rout$obj$pred, rout$obj$fam, rout$obj$root)
+    theta <- with(rout, c(alpha, b, nu))
+    fscale <- abs(objfun(theta))
+    typsize <- abs(theta)
+    nlm(objfun, theta, hessian = TRUE, typsize = typsize,
+        fscale = fscale, iterlim = 1000)
+}
+```
+So apply this function to parent fits.
+```{r fixup.reaster.parents, cache=TRUE, dependson="reaster.parents"}
+rout.parents.fixed <- mclapply(rout.parents, function(x)
+    mclapply(x, function(rout) try(fixup(rout))))
+```
+
+<!-- REVISED DOWN TO HERE -->
+
+# Mapping Sire and Grandsire Effects to Mean Values
+
+We follow Section 9 of @zenodo *mutatis mutandis*.  The main changes are
+here we will have a vectorizing function that simultaneously does
+mean fitness values for a specified set of individuals.
+```{r map}
+map.factory <- function(rout, is.subsamp, include.random, which.ind) {
+    stopifnot(inherits(rout, "reaster"))
+    stopifnot(is.logical(is.subsamp))
+    stopifnot(is.logical(include.random))
+    stopifnot(is.integer(which.ind))
+    aout <- rout$obj
+    stopifnot(inherits(aout, "aster"))
+    nnode <- ncol(aout$x)
+    nind <- nrow(aout$x)
+    if (nnode != length(is.subsamp))
+        stop("length(is.subsamp) not the number of nodes in the aster graph")
+    if (any(which.ind < 1 | which.ind > nind))
+        stop("which.ind not indices of individuals")
+    fixed <- rout$fixed
+    random <- rout$random
+    alpha <- rout$alpha
+    bee <- rout$b
+    if(length(bee) != length(include.random))
+        stop("length(include.random) not the number of random effects",
+            " in the aster model")
+    # fake object of class aster
+    fake.out <- aout
+    fake.beta <- c(alpha, bee[include.random])
+    modmat.random <- Reduce(cbind, random)
+    stopifnot(ncol(modmat.random) == length(bee))
+    modmat.random <- modmat.random[ , include.random, drop = FALSE] 
+    fake.modmat <- cbind(fixed, modmat.random)
+    # now have to deal with objects of class aster (as opposed to reaster)
+    # thinking model matrices are three-way arrays.
+    stopifnot(prod(dim(aout$modmat)[1:2]) == nrow(fake.modmat))
+    fake.modmat <- array(as.vector(fake.modmat),
+        dim = c(dim(aout$modmat)[1:2], ncol(fake.modmat)))
+    fake.out$modmat <- fake.modmat
+    nparm <- length(rout$alpha) + length(rout$b) + length(rout$nu)
+    is.alpha <- 1:nparm %in% seq_along(rout$alpha)
+    is.bee <- 1:nparm %in% (length(rout$alpha) + seq_along(rout$b))
+    function(alphabeenu) {
+        if (! missing(alphabeenu)) {
+            stopifnot(is.numeric(alphabeenu))
+            stopifnot(is.finite(alphabeenu))
+            stopifnot(length(alphabeenu) == nparm)
+            delta.alpha <- alphabeenu[is.alpha]
+            delta.bee <- alphabeenu[is.bee]
+            fake.beta <- fake.beta + c(delta.alpha, delta.bee[include.random])
+        }
+        fake.out$coefficients <- fake.beta
+        pout <- predict(fake.out, model.type = "conditional",
+            is.always.parameter = TRUE)
+        xi <- matrix(pout, ncol = nnode)
+        xi <- xi[ , ! is.subsamp, drop = FALSE]
+        mu <- apply(xi, 1, prod)
+        mu <- mu[which.ind]
+        names(mu) <- names(which.ind)
+        return(mu)
+    }
+}
+```
+
+We need a help page (not a literal one) for R function `map.factory`,
+so here goes.
+
+R function `map.factory` produces a function with one argument
+that calculates mean fitness estimates for individuals
+(not for the population) from a `reaster` fit.
+That is, it is a function whose value is another function.
+The arguments of `map.factory` are
+
+ * `rout` an object returned by R function `reaster`,
+
+ * `is.subsamp` a logical vector that indicates which nodes of the
+   aster graph for a single individual are subsampling nodes,
+
+ * `include.random` a logical vector that indicates which random effects
+   of the reaster fit we want to use in the estimation (in this document
+   sire or grandsire effects, as the case may be),
+
+ * `which.ind` an integer vector that indicates which individuals in the
+   data for the reaster fit we want to use for estimation (when we only
+   use sire effects for prediction all individuals with the same sire
+   have the same prediction because we have no fixed effects that differ
+   among individuals).  `names(which.ind)` is transferred to be the names
+   of the result of the function produced by this function factory.
+
+The value of this function is another function with signature
+```
+function(alphabeenu)
+```
+
+The argument may be missing, in which case it is taken to be the zero vector.
+Otherwise, it is the length of the entire parameter vector
+```
+length(rout$alpha) + length(rout$b) + length(rout$nu)
+```
+even though not all of these are used in the prediction.
+(This is convenient for evaluating gradients numerically.)  The argument
+`alphabeenu` is not the parameter vector but rather the delta from the MLE
+(so when missing or zero, we are evaluating the MLE prediction).
+
+**Warning:** This function only works for linear aster graphs, as explained
+in Section 9 of @zenodo.  Appendix (Section 16) of @zenodo says how to
+correct the `map` function of that paper for a non-linear graph.
+Similar considerations would apply here.
+
+# Estimates of Mean Fitness and Differences Thereof
+
+## Individual Fitnesses (Depends only on Family)
+
+In writing the R function `my.fun` below, we need to figure out how to define
+the argument `which.ind` of R function `map.factory`.  This is made quite
+tricky by our use of functional programming, so we have only the object
+of class  `"reaster"` to figure this out.  It can be done but, as we said,
+it is tricky.
+```{r my.fun.try}
+# start with any of our objects of class "reaster"
+rout <- rout.parents[[1]][[1]]
+# get number of individuals and number of nodes
+m <- rout$obj$modmat
+nind <- dim(m)[1]
+nnode <- dim(m)[2]
+# get model matrix for parental random effects
+m <- rout$random$parental
+# get columns that correspond to paternal or grandpaternal effects
+dads <- grep("paternal", colnames(m))
+# get family, that is, paternalID or grandpaternalID as the case may be
+fams <- colnames(m)[dads] |> sub("^.*ID", "", x = _)
+fams
+# drop maternal effects columns (if any)
+m.dads <- m[ , dads, drop = FALSE]
+# make into 3-dimensional array, like obj$modmat
+m.dads <- array(m.dads, c(nind, nnode, ncol(m.dads)))
+# only keep fitness node
+# only works for linear graph
+m.dads <- m.dads[ , nnode, ]
+# redefine dads as families of individuals
+stopifnot(as.vector(m.dads) %in% c(0, 1))
+stopifnot(rowSums(m.dads) == 1)
+# tricky, only works because each row of m.dads is indicator vector of family,
+# so we are multiplying family number by zero or one
+dads <- drop(m.dads %*% as.integer(fams))
+# find one individual in each family
+which.ind <- match(sort(unique(dads)), dads)
+setequal(dads[which.ind], fams)
+```
+In the following we define another function factory that invokes R function
+`map.factory` defined above to output the function that does estimates.
+This is just tailoring `map.factory`, which is rather generic, to this
+particular analysis.
+```{r my.fun, error=TRUE}
+my.fun.factory <- function(rout) {
+    m <- rout$obj$modmat
+    nind <- dim(m)[1]
+    nnode <- dim(m)[2]
+    m <- rout$random$parental
+    dads <- grep("paternal", colnames(m))
+    fams <- colnames(m)[dads] |> sub("^.*ID", "", x = _)
+    m.dads <- m[ , dads, drop = FALSE]
+    m.dads <- array(m.dads, c(nind, nnode, ncol(m.dads)))
+    m.dads <- m.dads[ , nnode, ]
+    stopifnot(as.vector(m.dads) %in% c(0, 1))
+    stopifnot(rowSums(m.dads) == 1)
+    dads <- drop(m.dads %*% as.integer(fams))
+    which.ind <- match(sort(unique(dads)), dads)
+    names(which.ind) <- dads[which.ind]
+    map.factory(rout, grepl("collected", vars),
+        grepl("paternal", names(rout$b)), which.ind)
+}
+mu.parents <- lapply(rout.parents, function(x)
+    lapply(x, function(y) my.fun.factory(y)()))
+mu.offspring <- lapply(rout.offspring, function(x)
+    lapply(x, function(y) my.fun.factory(y)()))
+```
+
+## Mean Fitness for Parental Populations
+
+```{r mean.fitness}
+mf.parents <- lapply(mu.parents, function(x) sapply(x, mean))
+```
+
+## Mean Fitness for Parental Populations as Expressed in Offspring
+
+This is trickier because we have account for selection in the parental
+generation.  There is no easy way to do this with functional programming,
+so we give up and switch to `for` loops.
+```{r mean.fitness.offspring}
+mf.offspring <- list()
+fitness.fraction <- list()
+for (site in names(mu.offspring))
+    for (year in names(mu.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        mu.prev <- mu.parents[[site]][[year.before]]
+        mu.off <- mu.offspring[[site]][[year]]
+        idx <- match(names(mu.off), names(mu.prev))
+        stopifnot(! is.na(idx))
+        mf.offspring[[site]][year] <-
+            sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx])
+        fitness.fraction[[site]][year] <-
+            sum(mu.prev[idx]) / sum(mu.prev)
+    }
+fitness.fraction
+```
+
+## Mean Fitness Differences Decomposed
+
+```{r mean.fitness.decomposition}
+mf.decomposition <- list()
+for (site in names(mu.offspring))
+    for (year in names(mu.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        mu.prev <- mu.parents[[site]][[year.before]]
+        mu.par <- mu.parents[[site]][[year]]
+        stopifnot(names(mu.prev) == names(mu.par))
+        mu.off <- mu.offspring[[site]][[year]]
+        idx <- match(names(mu.off), names(mu.prev))
+        delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) -
+            mean(mu.prev)
+        delta.environ <- mean(mu.par - mu.prev)
+        delta.fftns <-
+            sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.prev)
+        delta.non.fftns <- delta.total - delta.environ - delta.fftns
+        mf.decomposition[[site]][[year]] <-
+            c(total = delta.total, environmental = delta.environ,
+            fftns = delta.fftns, non.fftns = delta.non.fftns)
+    }
+mf.decomposition
+```
+
+# Plotting the Decomposition
+
+## Figure Without Error Bars, Try One
+
+We do one example.  Here `year` is the offspring year.
+```{r plot-site-year}
+site <- "GC"
+year <- "2016"
+year.before <- as.character(as.numeric(year) - 1)
+```
+
+```{r plot-caption,echo=FALSE, results="hide"}
+cap <- paste0("Mean fitness of parents (", year.before, ") and offspring (",
+    year, ") in site ", site, " decomposed into genetic contributions",
+    " described by FFTNS, environmental component, and other genetic",
+    " (residual).  Fitness is expected number of offspring per individual",
+    " (seeds produced per seed sown).  Gray arrows add up to blue arrow.",
+    " Horizontal dimension is meaningless.")
+```
+```{r plot, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+par(mar = c(1, 4, 0, 0) + 0.1)
+y <- c(mf.parents[[site]][year.before], mf.offspring[[site]][year])
+mfd <- mf.decomposition[[site]][[year]]
+mfd <- mfd[c("fftns", "environmental", "non.fftns")]
+delta <- cumsum(mfd)
+ylim <- y[1] + range(delta)
+ylim
+plot(c(0, 3), y, xlab = "", ylab = "lifetime fitness", pch = 19,
+    col = "blue", axes = FALSE, ylim = ylim)
+box()
+axis(side = 2)
+arrows(x0 = 0, x1 = 3, y0 = y[1], y1 = y[2], col = "blue")
+arrows(x0 = 0:2, x1 = 1:3, y0 = y[1] + c(0, delta[-3]), y1 = y[1] + delta,
+    col = "darkgray")
+# figure out angles of arrows
+# adjust for actual plot, which does not have horizontal and vertical coords
+# equal units
+par.pin <- par("pin")
+par.plt <- par("plt")
+par.usr <- par("usr")
+par.plt <- c(diff(par.plt[1:2]), diff(par.plt[3:4]))
+par.usr <- c(diff(par.usr[1:2]), diff(par.usr[3:4]))
+foo <- par.pin * par.plt / par.usr
+foo
+angles <- atan(mfd * foo[2] / foo[1]) / pi * 180
+angles
+radians <- 2 * pi * angles / 360
+cos(radians)
+sin(radians)
+delta.text <- 0.2
+text(0, y[1] - delta.text / foo[2], "parents", col = "blue", adj = 0)
+text(3, y[2] + delta.text / foo[2], "offspring", col = "blue", adj = 1)
+text(0.5 - sin(radians[1]) * delta.text / foo[1],
+    y[1] + delta[1] / 2 + cos(radians[1]) * delta.text / foo[2],
+    "FFTNS", col = "darkgray", srt = angles[1])
+text(1.5 - sin(radians[2]) * delta.text / foo[1],
+    y[1] + mean(delta[1:2]) + cos(radians[2]) * delta.text / foo[2],
+    "environmental", col = "darkgray", srt = angles[2])
+text(2.5 - sin(radians[3]) * delta.text / foo[1],
+    y[1] + mean(delta[2:3]) + cos(radians[3]) * delta.text / foo[2],
+    "residual", col = "darkgray", srt = angles[3])
+```
+See Figure 1 (code not shown).
+
+## Figure Without Error Bars, Try Two
+
+```{r plotToo, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+par(mar = c(1, 4, 0, 0) + 0.1)
+y <- c(mf.parents[[site]][year.before], mf.offspring[[site]][year])
+mfd <- mf.decomposition[[site]][[year]]
+mfd <- mfd[c("fftns", "environmental", "non.fftns")]
+ylim <- y[1] + range(mfd)
+plot(c(0, 3), y, xlab = "", ylab = "lifetime fitness", pch = 19,
+    col = "blue", axes = FALSE, ylim = ylim)
+box()
+axis(side = 2)
+arrows(x0 = 0, x1 = 3, y0 = y[1], y1 = y[2], col = "blue")
+arrows(x0 = rep(0, 3), x1 = rep(1, 3), y0 = rep(y[1], 3), y1 = y[1] + mfd,
+    col = "darkgray")
+# figure out angles of arrows
+# adjust for actual plot, which does not have horizontal and vertical coords
+# equal units
+par.pin <- par("pin")
+par.plt <- par("plt")
+par.usr <- par("usr")
+par.plt <- c(diff(par.plt[1:2]), diff(par.plt[3:4]))
+par.usr <- c(diff(par.usr[1:2]), diff(par.usr[3:4]))
+foo <- par.pin * par.plt / par.usr
+foo
+angles <- atan(mfd * foo[2] / foo[1]) / pi * 180
+angles
+radians <- 2 * pi * angles / 360
+cos(radians)
+sin(radians)
+delta.text <- 0.2
+text(0.2, y[1] - delta.text / foo[2], "parents", col = "blue", adj = 0)
+text(2.8, y[2] + delta.text / foo[2], "offspring", col = "blue", adj = 1)
+text(0.5 - sin(radians[1]) * delta.text / foo[1],
+    y[1] + delta[1] / 2 + cos(radians[1]) * delta.text / foo[2],
+    "FFTNS", col = "darkgray", srt = angles[1])
+text(0.5 - sin(radians[2]) * delta.text / foo[1],
+    y[1] + mfd["environmental"] / 2 + cos(radians[2]) * delta.text / foo[2],
+    "environmental", col = "darkgray", srt = angles[2])
+text(0.5 - sin(radians[3]) * delta.text / foo[1],
+    y[1] + mfd["non.fftns"] / 2 + cos(radians[3]) * delta.text / foo[2],
+    "residual", col = "darkgray", srt = angles[3])
+```
+See Figure 2 (code not shown).
+
+# Standard Errors for These Estimates
+
+Because we did the estimates in two steps, we do the standard errors in
+two steps likewise.
+
+## Standard Errors for Individual Mean Fitnesses
+
+Calculate variance-covariance matrix for estimated individual mean fitnesses.
+```{r vcov.mu, cache=TRUE, depends="vcov.reaster.parents"}
+jack.mu.parents <- lapply(rout.parents, function(x) lapply(x, function(y) {
+    my.fun <- my.fun.factory(y)
+    zero <- rep(0, length(y$alpha) + length(y$b) + length(y$nu))
+    jacobian(my.fun, zero)
+}))
+# we have a problem making standard errors in that we cannot for one
+# site-year combo: have to if guard for class "try-error"
+# without SIMPLIFY = FALSE following does not work
+vout.mu.parents <- mapply(jack.mu.parents, vout.parents,
+    SIMPLIFY = FALSE, FUN = function(x, y) {
+    mapply(x, y, SIMPLIFY = FALSE, FUN = function(jack, vout) {
+        if (inherits(vout, "try-error")) {
+            matrix(NaN, nrow(jack), nrow(jack))
+        } else {
+            jack %*% vout %*% t(jack)
+        }
+    })
+})
+```
+
+Now do the same for offspring.
+```{r vcov.mu.off, cache=TRUE, depends="vcov.reaster.offspring"}
+jack.mu.offspring <- lapply(rout.offspring, function(x) lapply(x, function(y) {
+    my.fun <- my.fun.factory(y)
+    zero <- rep(0, length(y$alpha) + length(y$b) + length(y$nu))
+    jacobian(my.fun, zero)
+}))
+# without SIMPLIFY = FALSE following does not work
+vout.mu.offspring <- mapply(jack.mu.offspring, vout.offspring,
+    SIMPLIFY = FALSE, FUN = function(x, y)
+    mapply(x, y, SIMPLIFY = FALSE, FUN = function(jack, vout)
+        jack %*% vout %*% t(jack))
+)
+```
+
+Check that everything is OK.
+```{r vcov.mu.check}
+lapply(vout.mu.parents, function(x) sapply(x, is.matrix))
+mapply(mu.parents, vout.mu.parents, FUN = function(x, y) {
+    mapply(x, y, FUN = function(mu, vcov) {
+        stopifnot(length(mu) == nrow(vcov))
+        stopifnot(length(mu) == ncol(vcov))
+        TRUE
+    })
+})
+lapply(vout.mu.offspring, function(x) sapply(x, is.matrix))
+mapply(mu.offspring, vout.mu.offspring, SIMPLIFY = FALSE, FUN = function(x, y) {
+    mapply(x, y, SIMPLIFY = FALSE, FUN = function(mu, vcov) {
+        # stopifnot(length(mu) == nrow(vcov))
+        # stopifnot(length(mu) == ncol(vcov))
+        c(len = length(mu), nrow = nrow(vcov), ncol = ncol(vcov))
+    })
+})
+```
+Looks OK.
+
+# DEBUG !!!!!
+
+```{r debug.too, error=TRUE, cache=TRUE}
+site.debug <- "GC"
+year.debug <- "2016"
+my.rout <- rout.offspring[[site.debug]][[year.debug]]
+myf <- my.fun.factory(my.rout)
+mu.debug <- myf()
+all.equal(mu.offspring[[site.debug]][[year.debug]], mu.debug)
+my.zero <- with(my.rout, length(alpha) + length(b) + length(nu)) |>
+    rep.int(0L, times = _)
+length(my.zero)
+dim(vout.offspring[[site.debug]][[year.debug]])
+my.jack <- jacobian(myf, my.zero)
+dim(my.jack)
+my.vcov <- vcov(my.rout, complete = TRUE, standard.deviation = FALSE,
+    re.too = TRUE)
+dim(my.vcov)
+summary(my.rout)
+my.rout$alpha
+my.rout$b
+my.rout$nu
+attributes(vout.offspring[[site.debug]][[year.debug]])
+## save for debugging
+save(my.rout, file = "debug.rout.rda")
+```
+
+Actually, does NOT look OK.  DEBUG!
+```{r debug}
+lapply(mu.parents, function(x) sapply(x, length))
+lapply(mu.offspring, function(x) sapply(x, length))
+mapply(mu.offspring, jack.mu.offspring, vout.offspring,
+    SIMPLIFY = FALSE, FUN = function(x, y, z) {
+    mapply(x, y, z, SIMPLIFY = FALSE, FUN = function(mu, jack, vcov) {
+        c(len.mu = length(mu), nrow.jac = nrow(jack), ncol.jac = ncol(jack),
+            nrow.vcov = nrow(vcov), ncol.vcov = ncol(vcov))
+    })
+})
+```
+
+DEBUG too.
+```{r debug.foo}
+my.nparm.parents <- lapply(rout.parents, function(x) sapply(x, function(y)
+    length(y$alpha) + length(y$b) + length(y$nu)))
+my.nparm.parents
+my.nparm.offspring <- lapply(rout.offspring, function(x) sapply(x, function(y)
+    length(y$alpha) + length(y$b) + length(y$nu)))
+my.nparm.offspring
+my.ncol.vcov.parents <- lapply(vout.parents, function(x) sapply(x, ncol))
+my.ncol.vcov.parents
+lapply(vout.parents, function(x) sapply(x, class))
+```
+
+## Standard Errors for Changes in Population Mean Fitness and Its Parts
+
+We proceed as we did in [computing the decomposition of differences in
+mean fitness above](#mean-fitness-differences-decomposed),
+except now we have to create one R function to do the
+job, which we then differentiate by numerical differentiation.
+```{r se.mean.fitness.decomposition}
+se.mf.decomposition <- list()
+for (site in names(mu.offspring))
+    for (year in names(mu.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        mu.prev <- mu.parents[[site]][[year.before]]
+        mu.par <- mu.parents[[site]][[year]]
+        stopifnot(names(mu.prev) == names(mu.par))
+        mu.off <- mu.offspring[[site]][[year]]
+        idx <- match(names(mu.off), names(mu.prev))
+        mu.combo <- c(mu.prev, mu.par, mu.off)
+        is.prev <- seq_along(mu.combo) %in% seq_along(mu.prev)
+        is.par <- seq_along(mu.combo) %in% (length(mu.prev) + seq_along(mu.par))
+        is.off <- ! (is.prev | is.par)
+        doit <- function(moo) {
+            stopifnot(is.numeric(moo))
+            stopifnot(is.finite(moo))
+            stopifnot(length(moo) == length(mu.combo))
+            mu.prev <- moo[is.prev]
+            mu.par <- moo[is.par]
+            mu.off <- moo[is.off]
+            delta.total <- sum(mu.off * mu.prev[idx]) / sum(mu.prev[idx]) -
+                mean(mu.prev)
+            delta.environ <- mean(mu.par - mu.prev)
+            delta.fftns <-
+                sum((mu.prev / sum(mu.prev) - 1 / length(mu.prev)) * mu.prev)
+            delta.non.fftns <- delta.total - delta.environ - delta.fftns
+            c(total = delta.total, environmental = delta.environ,
+                fftns = delta.fftns, non.fftns = delta.non.fftns)
+        }
+        foo <- doit(mu.combo)
+        stopifnot(identical(mf.decomposition[[site]][[year]], foo))
+        jack.combo <- jacobian(doit, mu.combo)
+        vcov.combo <- bdiag(vout.mu.parents[[site]][[year.before]],
+            vout.mu.parents[[site]][[year]], vout.mu.offspring[[site]][[year]])
+        result <- jack.combo %*% vcov.combo %*% t(jack.combo)
+        result <- diag(result)
+        names(result) <- names(foo)
+        se.mf.decomposition[[site]][[year]] <- result
+    }
+se.mf.decomposition
+```
+
+# Zero Observed Fitness
+
+```{r foobaz}
+years <- sort(unique(data.primary[[1]]$year))
+names(years) <- years
+years
+lapply(data.primary, function(x) lapply(years, function(y) {
+    subset(x, year == y & cohort == "greenhouse") |>
+    with(split(totalseeds, paternalID)) |> sapply(sum)
+}))
+lapply(data.primary, function(x) lapply(years, function(y) {
+    subset(x, year == y & cohort == "field") |>
+    with(split(totalseeds, grandpaternalID)) |> sapply(sum)
+}))
+lapply(mu.parents, function(x) lapply(x, names))
+lapply(mu.offspring, function(x) lapply(x, names))
+mu.parents$CS[["2015"]]
+mu.offspring$CS[["2016"]]
+```
+
+Seeds in parents but no offspring planted.
+```{r zeros.too}
+sites <- names(data.primary) |> sort() |> unique()
+sites
+years <- with(data.primary[[1]], year[cohort == "field"]) |> sort() |> unique()
+years
+foo <- list()
+for (site in sites) {
+    x <- data.primary[[site]]
+    my.result <- NULL
+    for (year in years) {
+        year.before <- as.character(as.numeric(year) - 1)
+        x.prev <- subset(x, cohort == "greenhouse" & year == year.before)
+        x.off <- subset(x, cohort == "field" & year == year)
+        pas <- x.prev$paternalID
+        grampas <- x.off$grandpaternalID
+        oopsie <- setdiff(pas, grampas)
+        print(oopsie)
+        result <- x.prev$totalseeds
+        names(result) <- pas
+        result <- result[names(result) %in% oopsie]
+        result <- split(result, names(result))
+        result <- sapply(result, sum)
+        if (length(result) == 0) result <- double(0)
+        result <- result[order(as.numeric(names(result)))]
+        foo[[site]][[year.before]] <- result
+    }
+}
+foo
+```
+
+# Mean Fitnesses
+
+```{r mean-fitness}
+mf.parents
+mf.offspring
+```
+
+# Differences in Mean Fitness Corresponding to FFTNS
+
+```{r mean-fftns}
+lapply(mu.parents, function(x) sapply(x,
+    function(x) sum((x / sum(x) - 1 / length(x)) * x)))
+```
+
+# References
+

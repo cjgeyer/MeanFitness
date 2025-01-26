@@ -1,12 +1,6 @@
 ---
-title: "Estimates of Realized Response to Selection in *Chamaecrista fasciculata* and Decomposition into Environmental and Genetic Parts"
-author:
-  - "Mason W. Kulbaba^[St. Mary's University, mason.kulbaba@stmu.ca, https://orcid.org/0000-0003-0619-7089]"
-  - "Seema N. Sheth^[Department of Plant and Microbial Biology, North Carolina State University, ssheth3@ncsu.edu, https://orcid.org/0000-0001-8284-7608]"
-  - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
-  - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
-  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
-  - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
+title: "New Objective Function for Reaster Problem"
+author: "Charles J. Geyer"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
   bookdown::pdf_document2:
@@ -20,37 +14,6 @@ bibliography: foo.bib
 csl: journal-of-the-royal-statistical-society.csl
 link-citations: true
 ---
-
-# Abstract {-}
-
-This work builds on @kulbaba-et-al and the correction to it [@zenodo]
-to obtain estimates of the realized response to natural selection.
-Those articles
-presented estimates of mean fitness and additive genetic variance for fitness
-for three populations of *Chamaecrista fasciculata*,
-each grown in its home location in three years via aster analyses
-of records of components of fitness for a pedigreed set of individuals.
-Here, we consider the realized change in mean fitness from one generation
-to the next, for comparison with the prediction from Fisher's
-Fundamental Theorem of Natural Selection (FFTNS).
-We divide change in mean fitness in one generation
-into three parts:
-that due to change in genetic composition described by FFTNS,
-that due to change in genetic composition not described by FFTNS, and
-that due to change in environment.
-Here, we obtain estimates of a) mean fitness of the pedigreed parental
-populations before selection (previously presented in @kulbaba-et-al and its
-correction); b) mean fitness of the pedigreed parental population after
-selection (i.e. accounting for the change in representation of the families
-reflected in differential seed production); and mean fitness of the offspring
-of the pedigreed sets
-(i. e., the outcome of natural selection on the parental
-generation when grown in the same sites in the following year).
-
-We also obtain standard errors of our estimates.
-In this we use a new scheme that treats random effects as parameters
-to estimate because we do use estimates of random effects in our estimates
-of mean fitness.
 
 # License
 
@@ -81,20 +44,33 @@ which will be made public whenever a paper based on it is submitted.
  * The version of the `Matrix` package used to make this document is
    `r packageVersion("Matrix")`.
 
- * The version of the `parallel` package used to make this document is
-   `r packageVersion("parallel")`.
-
 Attach packages.
 ```{r package}
 library("aster")
 library("numDeriv")
 library("Matrix")
-library("parallel")
-options("mc.cores" = detectCores())
 ```
 
-Need at least version 1.3 of R package `aster` for R generic function `vcov`
-to work on results of calls to R functions `aster` and `reaster`.
+Need at least version 1.3.0 of R package `aster` for
+R function `objfun.factory` that makes objective function for aster models
+with random effects (Laplace approximation to actual log likelihood)
+equation (7) of @reaster except that R function `objfun.factory` no longer
+uses the ``second approximation'' that treats $\widehat{W}$ in that equation
+as a constant matrix.  Hence we should rewrite it as
+\begin{equation}
+\begin{equation} \label{eq:pee}
+\begin{split}
+   p(\alpha, b, \nu)
+   & =
+   - l(a + M \alpha + Z b)
+   + \tfrac{1}{2} b^T D^{-1} b
+   \\
+   & \quad
+   + \tfrac{1}{2} \log
+   \det\bigl[ Z^T W(a + M \alpha + Z b) Z D + I \bigr]
+\end{split}
+\end{equation}
+
 ```{r aster-version}
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3") >= 0)
 ```
@@ -105,8 +81,6 @@ stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3") >= 0)
 ```
 
 # Data
-
-## Files
 
 For the analyses here. the data files are
 ```{r data.input}
@@ -130,10 +104,9 @@ For more details, see @kulbaba-et-al.
 Much preprocessing of these data has already been done.  See
 the file `fixup-data.pdf` in this repository.
 
-## Structure
+# Introduction
 
-We do aster analyses with random effects (@aster2, @reaster) for
-an aster model with graph
+We do aster (@aster2, @reaster) analyses for an aster model with graph
 $$
 \begin{CD}
   1 @>\text{Ber}>> \texttt{Germ}
@@ -184,15 +157,11 @@ key.data <- tools::md5sum("mf.rda")
 ## Parents
 
 We have nine analyses to do here, one for each site-year combination.
-
-We have three covariates: sire, dam, and block, which we make random effects.
-We `cbind` the model matrices for sire and dam, so they share a variance
-component.
 ```{r reaster.parents, cache=TRUE, cache.extra=key.data}
 years <- sort(unique(data.primary[[1]]$year))
 names(years) <- years
 years
-rout.parents <- mclapply(data.primary, function(x) mclapply(years, function(y) {
+rout.parents <- lapply(data.primary, function(x) lapply(years, function(y) {
     subdat <- subset(x, year == y & cohort == "greenhouse")
     subdat <- droplevels(subdat)
     redata <- reshape(subdat, varying = list(vars), direction = "long",
@@ -226,6 +195,20 @@ lapply(sout.parents, function(x)
 lapply(sout.parents, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
 ```
 
+Check that variance-covariance calculation also works.
+```{r vcov.reaster.parents, cache=TRUE, depends="reaster.parents"}
+vout.parents <- lapply(rout.parents, function(x)
+    lapply(x, function(x) try(vcov(x, standard.deviation = FALSE,
+        re.too = TRUE, complete = TRUE), silent = TRUE)))
+```
+
+Check that we got no errors (`TRUE` means no error).
+```{r quid.est.happening.too.too}
+lapply(vout.parents, function(x) sapply(x, function(x)
+    ! inherits(x, "try-error")))
+```
+Oops!  No standard errors for CS 2015.
+
 ## Offspring
 
 We have six analyses to do here, one for each site-year combination.
@@ -233,8 +216,7 @@ We have six analyses to do here, one for each site-year combination.
 years <- with(data.primary[[1]], year[cohort == "field"]) |> sort() |> unique()
 names(years) <- years
 years
-rout.offspring <- mclapply(data.primary,
-    function(x) mclapply(years, function(y) {
+rout.offspring <- lapply(data.primary, function(x) lapply(years, function(y) {
     subdat <- subset(x, year == y & cohort == "field")
     subdat <- droplevels(subdat)
     redata <- reshape(subdat, varying = list(vars), direction = "long",
@@ -249,33 +231,23 @@ rout.offspring <- mclapply(data.primary,
 ```
 Summaries.
 ```{r summary.reaster.offspring, cache=TRUE, depends="reaster.offspring"}
-sout.offspring <- mclapply(rout.offspring, function(x) mclapply(x, summary))
+sout.offspring <- lapply(rout.offspring, function(x) lapply(x, summary))
 ```
 Estimates of variance components.
 ```{r quid.est.happening.too.too.too}
 lapply(sout.offspring, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
 ```
 
-# Fixup Random Effects Aster Estimates
+Check that variance-covariance calculation also works.
+```{r vcov.reaster.offspring, cache=TRUE, depends="reaster.offspring"}
+vout.offspring <- lapply(rout.offspring, function(x)
+    lapply(x, function(x) try(vcov(x, standard.deviation = FALSE,
+        re.too = TRUE, complete = TRUE), silent = TRUE)))
+```
 
-Version 1.3 of R package `aster` has a new function `objfun.factory` that
-makes the objective function for an aster model with random effects
-(the Laplace approximation for minus the log likelihood).  We feed that
-to R function `nlm` to minimize to improve estimates.
-```{r fixup.reaster}
-fixup <- function(rout) {
-    stopifnot(inherits(rout, "reaster"))
-    objfun <- objfun.factory(rout$fixed, rout$random, rout$response,
-        rout$obj$pred, rout$obj$fam, rout$obj$root)
-    theta <- with(rout, c(alpha, b, nu))
-    fscale <- abs(objfun(theta))
-    typsize <- abs(theta)
-    nlm(objfun, theta, hessian = TRUE, typsize = typsize,
-        fscale = fscale, iterlim = 1000)
-}
+Check that we got no errors (`TRUE` means no error).
+```{r quid.est.happening.too.too.off}
+lapply(vout.offspring, function(x) sapply(x, function(x)
+    ! inherits(x, "try-error")))
 ```
-So apply this function to parent fits.
-```{r fixup.reaster.parents, cache=TRUE, dependson="reaster.parents"}
-rout.parents.fixed <- mclapply(rout.parents, function(x)
-    mclapply(x, function(rout) try(fixup(rout))))
-```
+
