@@ -84,6 +84,9 @@ which will be made public whenever a paper based on it is submitted.
  * The version of the `parallel` package used to make this document is
    `r packageVersion("parallel")`.
 
+ * The version of the `alabama` package used to make this document is
+   `r packageVersion("alabama")`.
+
 Attach packages.
 ```{r package}
 library("aster")
@@ -91,12 +94,13 @@ library("numDeriv")
 library("Matrix")
 library("parallel")
 options("mc.cores" = detectCores())
+library("alabama")
 ```
 
-Need at least version 1.3 of R package `aster` for R generic function `vcov`
+Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
 to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
-stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3") >= 0)
+stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3-4") >= 0)
 ```
 
 ```{r checkerrors, echo=FALSE}
@@ -107,6 +111,10 @@ stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3") >= 0)
 # Data
 
 ## Files
+
+```{r key.gc, echo=FALSE}
+key.data <- tools::md5sum("mf.rda")
+```
 
 For the analyses here. the data files are
 ```{r data.input}
@@ -167,6 +175,7 @@ is the name of the conditional distribution of the successor variable
 given the predecessor variable.
 The arrow labeled `samp` is a subsampling arrow.  It is a Bernoulli
 arrow but the sampling is experimental rather than biological.
+This arrow may be [missing in some analyses](#alternative-structure).
 
 Set graphical model description in R.
 ```{r graph}
@@ -175,9 +184,52 @@ pred <- c(0, 1, 2, 3, 4)
 fam <- c(1, 1, 2, 1, 2)
 ```
 
-```{r key.gc, echo=FALSE}
-key.data <- tools::md5sum("mf.rda")
+## Alternative Structure
+
+Get years.
+```{r years}
+years <- sort(unique(data.primary[[1]]$year))
+names(years) <- years
+years
+
+years.offspring <- with(data.primary[[1]], year[cohort == "field"]) |>
+    sort() |> unique()
+names(years.offspring) <- years.offspring
+years.offspring
 ```
+
+And for each site-year combination, subset data for parents
+(`cohort == "greenhouse"`) and check for presence of subsampling.
+```{r check.subsampling.parents}
+samp.parents <- lapply(data.primary, function(x) lapply(years, function(y) {
+    subdat <- subset(x, year == y & cohort == "greenhouse")
+    subdat <- droplevels(subdat)
+    with(subdat, any(total.pods > total.pods.collected))
+    }))
+samp.parents
+```
+We see that we have two parental generation analyses (out of nine) in which
+there is no subsampling.  For these we have to change the aster graph for
+individuals to omit the subsampling arrow.
+```{r graph.no.subsamp}
+vars.no.samp <- c("Germ", "flw", "total.pods", "totalseeds")
+pred.no.samp <- c(0, 1, 2, 3)
+fam.no.samp <- c(1, 1, 2, 2)
+```
+
+Now do the same check for offspring
+(`cohort == "field"`).
+```{r check.subsampling.offspring}
+samp.offspring <- lapply(data.primary, function(x)
+    lapply(years.offspring, function(y) {
+    subdat <- subset(x, year == y & cohort == "field")
+    subdat <- droplevels(subdat)
+    with(subdat, any(total.pods > total.pods.collected))
+    }))
+samp.offspring
+```
+So no issues with this for offspring: all offspring generation analyses
+have subsampling.
 
 # Analyses with R Function Reaster
 
@@ -189,52 +241,57 @@ We have three covariates: sire, dam, and block, which we make random effects.
 We `cbind` the model matrices for sire and dam, so they share a variance
 component.
 ```{r reaster.parents, cache=TRUE, cache.extra=key.data}
-years <- sort(unique(data.primary[[1]]$year))
-names(years) <- years
-years
 rout.parents <- mclapply(data.primary, function(x) mclapply(years, function(y) {
     subdat <- subset(x, year == y & cohort == "greenhouse")
     subdat <- droplevels(subdat)
-    redata <- reshape(subdat, varying = list(vars), direction = "long",
-        timevar = "varb", times = as.factor(vars), v.names = "resp")
+    has.subsamp <- with(subdat, any(total.pods > total.pods.collected))
+    if (has.subsamp) {
+        redata <- reshape(subdat, varying = list(vars), direction = "long",
+            timevar = "varb", times = as.factor(vars), v.names = "resp")
+    } else {
+        redata <- reshape(subdat, varying = list(vars.no.samp),
+            direction = "long", timevar = "varb",
+            times = as.factor(vars.no.samp), v.names = "resp")
+    }
     redata <- transform(redata,
         fit = as.numeric(grepl("totalseeds", as.character(varb))),
         root = 1)
     modmat.sire <- model.matrix(~ 0 + fit:paternalID, redata)
     modmat.dam <- model.matrix(~ 0 + fit:maternalID, redata)
     modmat.siredam <- cbind(modmat.sire, modmat.dam)
-    reaster(resp ~ fit + varb,
-        list(parental=~0 + modmat.siredam, block = ~ 0 + fit:block),
-        pred, fam, varb, id, root, data = redata)
-    }))
+    if (has.subsamp) {
+        reaster(resp ~ fit + varb,
+            list(parental = ~ 0 + modmat.siredam, block = ~ 0 + fit:block),
+            pred, fam, varb, id, root, data = redata)
+    } else {
+        reaster(resp ~ fit + varb,
+            list(parental = ~ 0 + modmat.siredam, block = ~ 0 + fit:block),
+            pred.no.samp, fam.no.samp, varb, id, root, data = redata)
+    }
+    }, mc.preschedule = FALSE), mc.preschedule = FALSE)
 ```
 
+Let's see what we got.
 Check what we got.
 ```{r quid.est.happening}
-sapply(rout.parents, class)
-lapply(rout.parents, names)
 lapply(rout.parents, function(x) sapply(x, function(x) inherits(x, "reaster")))
 ```
 
-Summaries.
-```{r summary.reaster.parents, cache=TRUE, depends="reaster.parents"}
-sout.parents <- lapply(rout.parents, function(x) lapply(x, summary))
-```
+Any variance components estimated to be zero?
 ```{r quid.est.happening.too}
-lapply(sout.parents, function(x)
-    sapply(x, function(x) inherits(x, "summary.reaster")))
-lapply(sout.parents, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
+lapply(rout.parents, function(x) sapply(x, function(x) x$nu))
 ```
+One case where block effects are estimated to be zero,
+but all cases have parental effects estimated to be nonzero,
+which is what we want.
 
 ## Offspring
 
-We have six analyses to do here, one for each site-year combination.
+We have six analyses to do here, one for each site-year combination
+(in which there are offspring).
 ```{r reaster.offspring, cache=TRUE, cache.extra=key.data}
-years <- with(data.primary[[1]], year[cohort == "field"]) |> sort() |> unique()
-names(years) <- years
-years
 rout.offspring <- mclapply(data.primary,
-    function(x) mclapply(years, function(y) {
+    function(x) mclapply(years.offspring, function(y) {
     subdat <- subset(x, year == y & cohort == "field")
     subdat <- droplevels(subdat)
     redata <- reshape(subdat, varying = list(vars), direction = "long",
@@ -247,35 +304,182 @@ rout.offspring <- mclapply(data.primary,
         pred, fam, varb, id, root, data = redata)
     }))
 ```
-Summaries.
-```{r summary.reaster.offspring, cache=TRUE, depends="reaster.offspring"}
-sout.offspring <- mclapply(rout.offspring, function(x) mclapply(x, summary))
-```
-Estimates of variance components.
-```{r quid.est.happening.too.too.too}
-lapply(sout.offspring, function(x) lapply(x, function(x) x$nu[ , "Estimate"]))
+
+Let's see what we got.
+Check what we got.
+```{r quid.est.happening.offspring}
+lapply(rout.offspring, function(x)
+    sapply(x, function(x) inherits(x, "reaster")))
 ```
 
-# Fixup Random Effects Aster Estimates
+Any variance components estimated to be zero?
+```{r quid.est.happening.too.offspring}
+lapply(rout.offspring, function(x) sapply(x, function(x) x$nu))
+```
+No case where any variance components are estimated to be zero.
 
-Version 1.3 of R package `aster` has a new function `objfun.factory` that
-makes the objective function for an aster model with random effects
-(the Laplace approximation for minus the log likelihood).  We feed that
-to R function `nlm` to minimize to improve estimates.
-```{r fixup.reaster}
-fixup <- function(rout) {
+# Asymptotic Variance-Covariance Matrices of Estimates
+
+## Parents
+
+```{r vcov.parents, cache=TRUE, dependson="reaster.parents"}
+vcov.parents <- mclapply(rout.parents, function(x)
+    mclapply(x, vcov, complete = TRUE, re.too = TRUE,
+    standard.deviation = FALSE))
+```
+
+## Offspring
+
+```{r vcov.offspring, cache=TRUE, dependson="reaster.offspring"}
+vcov.offspring <- mclapply(rout.offspring, function(x)
+    mclapply(x, vcov, complete = TRUE, re.too = TRUE,
+    standard.deviation = FALSE))
+```
+
+# Mapping Sire and Grandsire Effects to Mean Values
+
+We follow Section 9 of @zenodo *mutatis mutandis*.  The main changes are
+here we will have a vectorizing function that simultaneously does
+mean fitness values for a specified set of individuals.
+```{r map}
+map.factory <- function(rout) {
     stopifnot(inherits(rout, "reaster"))
-    objfun <- objfun.factory(rout$fixed, rout$random, rout$response,
-        rout$obj$pred, rout$obj$fam, rout$obj$root)
-    theta <- with(rout, c(alpha, b, nu))
-    fscale <- abs(objfun(theta))
-    typsize <- abs(theta)
-    nlm(objfun, theta, hessian = TRUE, typsize = typsize,
-        fscale = fscale, iterlim = 1000)
+    aout <- rout$obj
+    stopifnot(inherits(aout, "aster"))
+    nnode <- ncol(aout$x)
+    nind <- nrow(aout$x)
+    fixed <- rout$fixed
+    random <- rout$random
+    if (nnode == 4) {
+        is.subsamp <- rep(FALSE, 4)
+    } else if (nnode == 5) {
+        is.subsamp <- c(FALSE, FALSE, FALSE, TRUE, FALSE)
+    } else stop("can only deal with graphs for individuals with 4 or 5 nodes",
+        "\nand graph is linear, and subsampling arrow is 4th of 5")
+    # fake object of class aster
+    randlab <- unlist(lapply(rout$random, colnames))
+    include.random <- grepl("paternalID", randlab, fixed = TRUE)
+    fake.out <- aout
+    fake.beta <- with(rout, c(alpha, b[include.random]))
+    modmat.random <- Reduce(cbind, random)
+    stopifnot(ncol(modmat.random) == length(rout$b))
+    modmat.random <- modmat.random[ , include.random, drop = FALSE] 
+    fake.modmat <- cbind(fixed, modmat.random)
+    # now have to deal with objects of class aster (as opposed to reaster)
+    # thinking model matrices are three-way arrays.
+    stopifnot(prod(dim(aout$modmat)[1:2]) == nrow(fake.modmat))
+    fake.modmat <- array(as.vector(fake.modmat),
+        dim = c(dim(aout$modmat)[1:2], ncol(fake.modmat)))
+    fake.out$modmat <- fake.modmat
+    nparm <- length(rout$alpha) + length(rout$b) + length(rout$nu)
+    is.alpha <- 1:nparm %in% seq_along(rout$alpha)
+    is.bee <- 1:nparm %in% (length(rout$alpha) + seq_along(rout$b))
+    is.nu <- (! (is.alpha | is.bee))
+    # figure out individuals from each family
+    m <- rout$random$parental
+    dads <- grep("paternal", colnames(m))
+    # get family, that is, paternalID or grandpaternalID as the case may be
+    fams <- colnames(m)[dads] |> sub("^.*ID", "", x = _)
+    # drop maternal effects columns (if any)
+    m.dads <- m[ , dads, drop = FALSE]
+    # make into 3-dimensional array, like obj$modmat
+    m.dads <- array(m.dads, c(nind, nnode, ncol(m.dads)))
+    # only keep fitness node
+    # only works for linear graph
+    m.dads <- m.dads[ , nnode, ]
+    # redefine dads as families of individuals
+    stopifnot(as.vector(m.dads) %in% c(0, 1))
+    stopifnot(rowSums(m.dads) == 1)
+    # tricky, only works because each row of m.dads
+    # is indicator vector of family,
+    # so we are multiplying family number by zero or one
+    dads <- drop(m.dads %*% as.integer(fams))
+    # find one individual in each family
+    sudads <- sort(unique(dads))
+    which.ind <- match(sudads, dads)
+    function(alphabeenu) {
+        stopifnot(is.numeric(alphabeenu))
+        stopifnot(is.finite(alphabeenu))
+        stopifnot(length(alphabeenu == nparm))
+        alpha <- alphabeenu[is.alpha]
+        bee <- alphabeenu[is.bee]
+        nu <- alphabeenu[is.sigma]
+        fake.beta <- c(alpha, bee[include.random])
+        fake.out$coefficients <- fake.beta
+        pout <- predict(fake.out, model.type = "conditional",
+            is.always.parameter = TRUE)
+        xi <- matrix(pout, ncol = nnode)
+        xi <- xi[ , ! is.subsamp, drop = FALSE]
+        mu <- apply(xi, 1, prod)
+        mu <- mu[which.ind]
+        names(mu) <- paste0("PID", formatC(sudads, format="d", width=3, flag="0"))
+        return(mu)
+    }
 }
 ```
-So apply this function to parent fits.
-```{r fixup.reaster.parents, cache=TRUE, dependson="reaster.parents"}
-rout.parents.fixed <- mclapply(rout.parents, function(x)
-    mclapply(x, function(rout) try(fixup(rout))))
+
+R function `map.factory` has one argument, an object of class `reaster`
+produced by a call to R function `reaster` and produces a function with
+one argument, which is a vector $\theta = (\alpha, c, \sigma)$ that contains
+the variables (fixed effects, standardized random effects, and standard
+deviation components), and that produced function returns
+mean fitness estimates for one individual from each "family" (sire for
+parental fits, grandsire for offspring fits).
+That is, it is a function whose value is another function.
+
+**Warning:** This function only works for linear aster graphs for "individuals"
+(in scare quotes) having four or five arrows and the only subsampling is the
+fourth of five.
+
+Try it out.
+```{r fitness-try-out}
+rout <- rout.parents[[1]][[1]]
+inherits(rout, "reaster")
+names(rout)
+map <- map.factory(rout)
+theta <- with(rout, c(alpha, c, sigma))
+map(theta)
 ```
+
+## Change in Mean Fitness Due to Selection
+
+These are the primary estimates of interest.  We can compute many functions
+of them that are of biological interest.  First, for the parental fits, we
+compute the change in mean fitness in one generation "due to selection before
+reproduction", that is, population mean fitness minus the same weighted by
+relative fitness.
+
+### One Analysis
+
+As always, we try one example, and then automate.
+```{r try-one-mf}
+site <- "CS"
+year <- "2015"
+rout <- rout.parents[[site]][[year]]
+objfun <- with(rout, objfun.factory(fixed, random, response,
+    obj$pred, obj$fam, as.vector(obj$root), zwz = zwz,
+    standard.deviation = TRUE, deriv = 1))
+theta.hat <- with(rout, c(alpha, c, sigma))
+map <- map.factory(rout)
+parfun <- function(theta) {
+    foo <- map(theta)
+    bar <- foo / sum(foo)
+    baz <- bar - 1 / length(bar)
+    sum(baz * foo)
+}
+```
+
+Here `parfun` is the function we want to maximize or minimize over the
+likelihood-based confidence region, just as for the single parameter above.
+```{r try-one-mf-ci, error=TRUE}
+lmin <- objfun(theta.hat)$value |> print()
+hoo <- function(theta) crit - 2 * (objfun(theta)$value - lmin)
+joo <- function(theta) rbind(- 2 * objfun(theta)$gradient)
+aout <- auglag(theta.hat, fn = parfun, hin = hoo, hin.jac = joo,
+    control.outer = list(trace = FALSE))
+aout$convergence == 0
+lower <- aout$value |> print()
+```
+
+# References
+
