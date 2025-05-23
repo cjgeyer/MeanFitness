@@ -84,8 +84,8 @@ which will be made public whenever a paper based on it is submitted.
  * The version of the `parallel` package used to make this document is
    `r packageVersion("parallel")`.
 
- * The version of the `alabama` package used to make this document is
-   `r packageVersion("alabama")`.
+ * The version of the `kableExtra` package used to make this document is
+   `r packageVersion("kableExtra")`.
 
 Attach packages.
 ```{r package}
@@ -94,7 +94,7 @@ library("numDeriv")
 library("Matrix")
 library("parallel")
 options("mc.cores" = detectCores())
-library("alabama")
+library("kableExtra")
 ```
 
 Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
@@ -122,7 +122,7 @@ load("mf.rda")
 ls()
 sapply(data.primary, class)
 ```
-for 
+for
 
  * Conard Environmental Research Area (CERA),
 
@@ -338,11 +338,24 @@ vcov.offspring <- mclapply(rout.offspring, function(x)
 
 # Mapping Sire and Grandsire Effects to Mean Values
 
+## A Function Factory
+
 We follow Section 9 of @zenodo *mutatis mutandis*.  The main changes are
 here we will have a vectorizing function that simultaneously does
 mean fitness values for a specified set of individuals.
-```{r map}
-map.factory <- function(rout) {
+
+We follow the dictates of literate programming
+([Wikipedia page](https://en.wikipedia.org/wiki/Literate_programming))
+developing our function a little bit at a time and then assembling all
+the bits into the whole function.  The function we are developing will have
+one argument `rout`, so we make an object of the correct type to exercise
+our code bits on.
+```{r map-rout}
+rout <- rout.parents[[1]][[1]]
+```
+
+Our first bit of code does some error checking and setup.
+```{r map-setup}
     stopifnot(inherits(rout, "reaster"))
     aout <- rout$obj
     stopifnot(inherits(aout, "aster"))
@@ -350,12 +363,25 @@ map.factory <- function(rout) {
     nind <- nrow(aout$x)
     fixed <- rout$fixed
     random <- rout$random
+```
+
+The next job is to figure out the subsampling nodes of the graph (if
+present).  Here the answer is the fourth of five.
+```{r map-subsampling}
     if (nnode == 4) {
         is.subsamp <- rep(FALSE, 4)
     } else if (nnode == 5) {
         is.subsamp <- c(FALSE, FALSE, FALSE, TRUE, FALSE)
     } else stop("can only deal with graphs for individuals with 4 or 5 nodes",
         "\nand graph is linear, and subsampling arrow is 4th of 5")
+```
+
+Now we have to deal with the problem that the only R function we have that
+maps from canonical to mean value parameters is R function `predict.aster`
+and we need to give it an object of class `"aster"`.  So we fake one.
+Here we only want the random effects that have the string `"paternalID"`
+in their names (that is, either paternalID or grandpaternalID).
+```{r map-fake}
     # fake object of class aster
     randlab <- unlist(lapply(rout$random, colnames))
     include.random <- grepl("paternalID", randlab, fixed = TRUE)
@@ -363,7 +389,8 @@ map.factory <- function(rout) {
     fake.beta <- with(rout, c(alpha, b[include.random]))
     modmat.random <- Reduce(cbind, random)
     stopifnot(ncol(modmat.random) == length(rout$b))
-    modmat.random <- modmat.random[ , include.random, drop = FALSE] 
+    # never forget drop = FALSE in programming R
+    modmat.random <- modmat.random[ , include.random, drop = FALSE]
     fake.modmat <- cbind(fixed, modmat.random)
     # now have to deal with objects of class aster (as opposed to reaster)
     # thinking model matrices are three-way arrays.
@@ -371,10 +398,19 @@ map.factory <- function(rout) {
     fake.modmat <- array(as.vector(fake.modmat),
         dim = c(dim(aout$modmat)[1:2], ncol(fake.modmat)))
     fake.out$modmat <- fake.modmat
+```
+
+The next job is to figure out which parameters are which.
+```{r map-extractors}
     nparm <- length(rout$alpha) + length(rout$b) + length(rout$nu)
     is.alpha <- 1:nparm %in% seq_along(rout$alpha)
     is.bee <- 1:nparm %in% (length(rout$alpha) + seq_along(rout$b))
     is.nu <- (! (is.alpha | is.bee))
+```
+
+The next job is to figure out which individuals are in which "families"
+(paternalID) and to get one of each for the output vector.
+```{r map-which-ind}
     # figure out individuals from each family
     m <- rout$random$parental
     dads <- grep("paternal", colnames(m))
@@ -397,22 +433,74 @@ map.factory <- function(rout) {
     # find one individual in each family
     sudads <- sort(unique(dads))
     which.ind <- match(sudads, dads)
-    function(alphabeenu) {
+```
+
+That finishes the setup.  Now we write the result of our factory function,
+which is another function with a single argument `alphabeenu` which is the
+vector of all the variables (fixed effects, random effects, and variance
+components.
+```{r map-alphabeenu}
+alphabeenu <- with(rout, c(alpha, b, nu))
+```
+
+So first check that this argument is OK.
+```{r map-return-check}
         stopifnot(is.numeric(alphabeenu))
         stopifnot(is.finite(alphabeenu))
-        stopifnot(length(alphabeenu == nparm))
+        stopifnot(length(alphabeenu) == nparm)
+```
+Then extract the various parts.  And make the `coefficients` component
+of our fake object of class `"aster"` to be the fixed effects vector `alpha`
+plus the random effects vector of the random effects we are "predicting"
+(those indicated by the indicator vector `include.random`).
+```{r map-return-extract}
         alpha <- alphabeenu[is.alpha]
         bee <- alphabeenu[is.bee]
-        nu <- alphabeenu[is.sigma]
+        nu <- alphabeenu[is.nu]
         fake.beta <- c(alpha, bee[include.random])
         fake.out$coefficients <- fake.beta
+```
+
+Do the prediction, mapping unconditional submodel canonical parameters $\beta$
+to conditional mean value parameters $\xi$.
+```{r map-return-predict}
         pout <- predict(fake.out, model.type = "conditional",
             is.always.parameter = TRUE)
+```
+
+Then put the result $\xi$ into matrix form, rows are individuals, columns
+are nodes of the graph for individuals.  Toss the column of subsampling nodes
+(if any) and multiply the rest to get unconditional mean value parameters for
+fitness (mean fitness).  Put in a comment that this only works for this
+particular graph.
+```{r map-return-moo}
         xi <- matrix(pout, ncol = nnode)
         xi <- xi[ , ! is.subsamp, drop = FALSE]
         mu <- apply(xi, 1, prod)
+```
+
+Finally, we put names on `mu` and return only one for each "family"
+(paternalID).
+```{r map-return-subset}
         mu <- mu[which.ind]
-        names(mu) <- paste0("PID", formatC(sudads, format="d", width=3, flag="0"))
+        names(mu) <- paste0("PID",
+            formatC(sudads, format="d", width=3, flag="0"))
+```
+
+Now put it all together in a function factory.
+```{r map}
+map.factory <- function(rout) {
+<<map-setup>>
+<<map-subsampling>>
+<<map-fake>>
+<<map-extractors>>
+<<map-which-ind>>
+    function(alphabeenu) {
+<<map-return-check>>
+<<map-return-extract>>
+<<map-return-predict>>
+<<map-return-moo>>
+<<map-return-subset>>
         return(mu)
     }
 }
@@ -432,53 +520,276 @@ That is, it is a function whose value is another function.
 fourth of five.
 
 Try it out.
-```{r fitness-try-out}
-rout <- rout.parents[[1]][[1]]
-inherits(rout, "reaster")
-names(rout)
+```{r fitness-try-out, error=TRUE}
 map <- map.factory(rout)
-theta <- with(rout, c(alpha, c, sigma))
-map(theta)
+map(alphabeenu)
 ```
 
-## Change in Mean Fitness Due to Selection
+## Apply To Parents
 
-These are the primary estimates of interest.  We can compute many functions
-of them that are of biological interest.  First, for the parental fits, we
-compute the change in mean fitness in one generation "due to selection before
-reproduction", that is, population mean fitness minus the same weighted by
-relative fitness.
+In hindsight, we did not want to apply R generic function `vcov` as
+we did above to make a separate list.  So we do it again here.
+```{r moo.parents, cache=TRUE, dependson="reaster.parents"}
+moo.parents <- mclapply(rout.parents, function(x) mclapply(x, function(y) {
+    map <- map.factory(y)
+    alphabeenu <- with(y, c(alpha, b, nu))
+    estimates <- map(alphabeenu)
+    jack <- jacobian(map, alphabeenu)
+    vcov.base <- vcov(y, complete = TRUE, re.too = TRUE,
+        standard.deviation = FALSE)
+    vcov.estimates <- jack %*% vcov.base %*% t(jack)
+    return(list(estimates = estimates, vcov = vcov.estimates))
+}))
+```
 
-### One Analysis
+## Apply To Offspring
 
-As always, we try one example, and then automate.
-```{r try-one-mf}
-site <- "CS"
-year <- "2015"
-rout <- rout.parents[[site]][[year]]
-objfun <- with(rout, objfun.factory(fixed, random, response,
-    obj$pred, obj$fam, as.vector(obj$root), zwz = zwz,
-    standard.deviation = TRUE, deriv = 1))
-theta.hat <- with(rout, c(alpha, c, sigma))
-map <- map.factory(rout)
-parfun <- function(theta) {
-    foo <- map(theta)
-    bar <- foo / sum(foo)
-    baz <- bar - 1 / length(bar)
-    sum(baz * foo)
+Same for offspring.
+```{r moo.offspring, cache=TRUE, dependson="reaster.offspring"}
+moo.offspring <- mclapply(rout.offspring, function(x) mclapply(x, function(y) {
+    map <- map.factory(y)
+    alphabeenu <- with(y, c(alpha, b, nu))
+    estimates <- map(alphabeenu)
+    jack <- jacobian(map, alphabeenu)
+    vcov.base <- vcov(y, complete = TRUE, re.too = TRUE,
+        standard.deviation = FALSE)
+    vcov.estimates <- jack %*% vcov.base %*% t(jack)
+    return(list(estimates = estimates, vcov = vcov.estimates))
+}))
+```
+
+# Change in Mean Fitness Due to Selection
+
+This is one of the main quantities of scientific interest, and the others
+are related to this.  For each vector $\mu$ returned by R function `map`
+we turn it into *relative fitness* by dividing by the mean.
+This is fitness "after selection but before reproduction".
+We compare this with fitness
+before selection, which is equal across families.  So the estimate of interest
+is `mean(mu * (mu / mean(mu) - 1))`
+
+We make this into a function so we can differentiate it numerically.
+```{r change}
+fitness_change <- function(mu) mean(mu * (mu / mean(mu) - 1))
+```
+
+Now we apply this function to parents and offspring.
+```{r change.parents, cache=TRUE, dependson="moo.parents"}
+change.parents <- mclapply(moo.parents, function(x) mclapply(x, function(y) {
+    grad <- grad(fitness_change, y$estimates)
+    my.vcov <- t(grad) %*% y$vcov %*% grad
+    return(list(estimates = fitness_change(y$estimates), vcov = my.vcov))
+}))
+```
+```{r change.offspring, cache=TRUE, dependson="moo.offspring"}
+change.offspring <- mclapply(moo.offspring, function(x)
+    mclapply(x, function(y) {
+    grad <- grad(fitness_change, y$estimates)
+    my.vcov <- t(grad) %*% y$vcov %*% grad
+    return(list(estimates = fitness_change(y$estimates), vcov = my.vcov))
+}))
+```
+
+Turn these into tables
+```{r change-tables}
+doit <- function(w, cap, lab) {
+    e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
+    se <- lapply(w, function(x) lapply(x, function(y) y$vcov)) |> unlist() |>
+        sqrt()
+    foo <- cbind(estimates = e, std.err. = se)
+    site <- substr(rownames(foo), 1, 2)
+    site.cs <- match("CS", site)
+    site.gc <- match("GC", site)
+    site.kw <- match("KW", site)
+    year <- substr(rownames(foo), 4, 7)
+    rownames(foo) <- year
+    kbl(foo, caption = cap, label = lab,
+        format = "latex", escape = FALSE, booktabs = TRUE, digits = 4) |>
+        kable_styling() |>
+        pack_rows("Grey Cloud Dunes", min(site.gc), max(site.gc),
+            indent = FALSE) |>
+        pack_rows("McCarthy Lake", min(site.kw), max(site.kw),
+            indent = FALSE) |>
+        pack_rows("CERA", min(site.cs), max(site.cs), indent = FALSE)
+}
+doit(change.parents, "Change in Mean Fitness Due to Selection in Parents",
+    "changeParents")
+doit(change.offspring, "Change in Mean Fitness Due to Selection in Offspring",
+    "changeOffspring")
+```
+
+# Comparison of Mean Fitness in Parents and Offspring
+
+Now we want to make inter-dataset comparisons and inter-year comparisons.
+To continue with functional programming we need to temporarily step outside
+of functional programming and use some plain old for loops to re-assemble
+the data the way we want it.  All of our comparisons in this section will
+involve "parents" in one year and "parents" in the following year (these
+are pedigreed individuals, and individuals planted in one year have full
+sibs planted in the next.  The "offspring" are open pollinated individuals
+(mothers known, fathers unknown) whose mothers are individuals among the
+"parents" in the previous year.
+
+We collect each of these into one vector with one variance-covariance
+matrix so we can apply one function to them to get estimates and differentiate
+that one function numerically to apply the delta method to get standard
+errors.
+```{r re-arrange,cache=TRUE,dependson=c("change.parents","change.offspring")}
+redata <- list()
+for (site in names(moo.offspring)) {
+    for (year in names(moo.offspring[[site]])) {
+        year.before <- as.character(as.numeric(year) - 1)
+        moo.prev <- moo.parents[[site]][[year.before]]
+        moo.par <- moo.parents[[site]][[year]]
+        stopifnot(names(moo.prev$estimates) == names(moo.par$estimates))
+        moo.off <- moo.offspring[[site]][[year]]
+        stopifnot(names(moo.off$estimates) %in% names(moo.prev$estimates))
+        idx <- match(names(moo.off$estimates), names(moo.prev$estimates))
+        my.off.est <- rep(0, length(moo.prev$estimates))
+        my.off.vcov <- matrix(0, length(my.off.est), length(my.off.est))
+        my.off.est[idx] <- moo.off$estimates
+        my.off.vcov[idx, idx] <- moo.off$vcov
+        redata[[site]][[year]] <- list( estimates =
+            c(moo.prev$estimates, moo.par$estimates, my.off.est),
+            vcov = bdiag(moo.prev$vcov, moo.par$vcov, my.off.vcov))
+    }
 }
 ```
 
-Here `parfun` is the function we want to maximize or minimize over the
-likelihood-based confidence region, just as for the single parameter above.
-```{r try-one-mf-ci, error=TRUE}
-lmin <- objfun(theta.hat)$value |> print()
-hoo <- function(theta) crit - 2 * (objfun(theta)$value - lmin)
-joo <- function(theta) rbind(- 2 * objfun(theta)$gradient)
-aout <- auglag(theta.hat, fn = parfun, hin = hoo, hin.jac = joo,
-    control.outer = list(trace = FALSE))
-aout$convergence == 0
-lower <- aout$value |> print()
+Here is our function to compute estimates of interest.
+
+  * total change in mean fitness over two years
+    \begin{equation}
+    \bar{\mu}_\text{total} =
+    \text{mean}\left(\mu_\text{off} \cdot
+    \frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}\right)
+    - \text{mean}(\mu_\text{prev})
+    \end{equation}
+    offspring mean fitness weighted by relative fitness of their parent
+    (because in the experiment offspring were not planted according to
+    their frequency, so we must correct for that)
+
+and this is divided into
+
+  * change due to selection (what Fisher's fundamental theorem of
+    natural selection is supposed to predict) in the parents
+    \begin{equation}
+    \bar{\mu}_\text{selection} =
+    \text{mean}\left[\left(\frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}
+    - 1\right) \cdot \mu_\text{prev} \right]
+    \end{equation}
+    parental mean fitness weighted by relative fitness minus one (this all
+    takes place in the parental sample).
+
+  * environmental change
+    \begin{equation}
+    \bar{\mu}_\text{environment} =
+    \text{mean}(\mu_\text{par}) - \text{mean}(\mu_\text{prev})
+    \end{equation}
+    difference between pedigreed individuals (which are full sibs) in different
+    years.  (Of course, this includes some genetic change because full sibs
+    are not clones.  But it does directly estimate the change due to different
+    environments in the two years.)
+
+  * residual change, the part of the total change not due to environment
+    or selection
+    \begin{equation}
+    \bar{\mu}_\text{residual} =
+    \bar{\mu}_\text{total} -
+    \bar{\mu}_\text{selection} -
+    \bar{\mu}_\text{environment}
+    \end{equation}
+
+```{r foo}
+foo <- function(theta) {
+    stopifnot(is.atomic(theta))
+    stopifnot(is.vector(theta))
+    stopifnot(is.numeric(theta))
+    stopifnot(is.finite(theta))
+    stopifnot(length(theta) %% 3 == 0)
+    nmu <- length(theta) %/% 3
+    is.prev <- seq_along(theta) <= nmu
+    is.off <- seq_along(theta) > 2 * nmu
+    is.par <- (! (is.prev | is.off))
+    mu.prev <- theta[is.prev]
+    mu.par <- theta[is.par]
+    mu.off <- theta[is.off]
+    
+    delta.total <- sum(mu.off * mu.prev) / sum(mu.prev) - mean(mu.prev)
+    delta.environ <- mean(mu.par - mu.prev)
+    delta.fftns <- mean((mu.prev / mean(mu.prev) - 1) * mu.prev)
+    delta.non.fftns <- delta.total - delta.environ - delta.fftns
+    c(total = delta.total, environmental = delta.environ,
+        selection = delta.fftns, residual = delta.non.fftns)
+}
+```
+
+Try it out.
+```{r foo.try}
+e <- redata[[1]][[1]]$estimates
+foo(e)
+```
+
+So now we want to use this function to calculate estimates and standard
+errors.
+```{r foo.doit,cache=TRUE,dependson="re-arrange"}
+fout <- mclapply(redata, function(x) mclapply(x, function(y) {
+    e <- foo(y$estimates)
+    jack <- jacobian(foo, y$estimates)
+    my.vcov <- jack %*% y$vcov %*% t(jack)
+    list(estimates = e, std.err. = sqrt(as.vector(diag(my.vcov))))
+}))
+```
+
+Look at one, just to see we are OK.
+```{r foo.doit.look}
+fout[[1]][[2]]
+```
+
+Now make a table for this.
+```{r foo.table}
+doit <- function(w) {
+    e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
+    se <- lapply(w, function(x) lapply(x, function(y) y$std.err.)) |> unlist()
+    foo <- cbind(estimates = e, std.err. = se)
+    site <- substr(rownames(foo), 1, 2)
+    site.cs <- "CS" == site
+    site.gc <- "GC" == site
+    site.kw <- "KW" == site
+    year <- substr(rownames(foo), 4, 7)
+    year.2016 <- "2016" == year
+    year.2017 <- "2017" == year
+    kind <- substr(rownames(foo), 9, 100)
+    rownames(foo) <- kind
+    kbl(foo, caption = "Estimates of Change in Mean Fitness", label = "decomp",
+        format = "latex", escape = FALSE, booktabs = TRUE, digits = 4) |>
+        kable_styling() |>
+        pack_rows("Grey Cloud Dunes, 2015-2016",
+            min(which(site.gc & year.2016)),
+            max(which(site.gc & year.2016)),
+            indent = FALSE) |>
+        pack_rows("Grey Cloud Dunes, 2016-2017",
+            min(which(site.gc & year.2017)),
+            max(which(site.gc & year.2017)),
+            indent = FALSE) |>
+        pack_rows("McCarthy Lake, 2015-2016",
+            min(which(site.kw & year.2016)),
+            max(which(site.kw & year.2016)),
+            indent = FALSE) |>
+        pack_rows("McCarthy Lake, 2016-2017",
+            min(which(site.kw & year.2017)),
+            max(which(site.kw & year.2017)),
+            indent = FALSE) |>
+        pack_rows("CERA, 2015-2016",
+            min(which(site.cs & year.2016)),
+            max(which(site.cs & year.2016)),
+            indent = FALSE) |>
+        pack_rows("CERA, 2016-2017",
+            min(which(site.cs & year.2017)),
+            max(which(site.cs & year.2017)),
+            indent = FALSE)
+}
+doit(fout)
 ```
 
 # References
