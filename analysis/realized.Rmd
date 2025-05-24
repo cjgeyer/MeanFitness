@@ -87,6 +87,9 @@ which will be made public whenever a paper based on it is submitted.
  * The version of the `kableExtra` package used to make this document is
    `r packageVersion("kableExtra")`.
 
+ * The version of the `Hmisc` package used to make this document is
+   `r packageVersion("Hmisc")`.
+
 Attach packages.
 ```{r package}
 library("aster")
@@ -95,6 +98,7 @@ library("Matrix")
 library("parallel")
 options("mc.cores" = detectCores())
 library("kableExtra")
+library("Hmisc")
 ```
 
 Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
@@ -102,6 +106,8 @@ to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3-4") >= 0)
 ```
+This version is now on CRAN so can be downloaded using R function
+`install.packages` or the equivalent my mousing around in the menus of some app.
 
 ```{r checkerrors, echo=FALSE}
 # make all code chunks after this one have option error=TRUE
@@ -747,7 +753,7 @@ fout[[1]][[2]]
 ```
 
 Now make a table for this.
-```{r foo.table}
+```{r footab}
 doit <- function(w) {
     e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
     se <- lapply(w, function(x) lapply(x, function(y) y$std.err.)) |> unlist()
@@ -790,6 +796,79 @@ doit <- function(w) {
             indent = FALSE)
 }
 doit(fout)
+```
+
+# Plotting the Decomposition
+
+We are going to try to show these numbers and standard errors in a plot.
+We will just do one example.
+```{r plot-site-year}
+site <- "GC"
+year <- "2016"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+
+Critical value.
+```{r plot-crit}
+conf.level <- 0.95
+crit <- qnorm((1 + conf.level) / 2)
+```
+
+The horizontal length of the arrows in this plot are entirely meaningless.
+They have to be different because we don't want the error bars to overlap.
+Table \@ref(tab:decomp)
+```{r plot-caption}
+cap <- paste0("Estimates in Table 3 with Error Bars.",
+   "  Horizontal coordinate is meaningless, but short vectors add up",
+   " to long vector.",
+   "  Vertical bars are approximate 95% confidence intervals.",
+   "  Site is ", site, ".",
+   "  Total is difference of parents (", year.before, ") and offspring (",
+   year, ").",
+   "  Selection is difference due to selection in parents (", year.before, ").",
+   "  Environmental is difference due to different environments in the",
+   " two years: difference of parents (", year.before, ") and full sibs grown",
+   " along with offspring.",
+   "  Residual is Total - Selection - Environmental, mostly genetic change",
+   " not due to selection in parents or gene-environment interaction.")
+```
+```{r plot, fig.align="center", fig.cap=cap}
+par(mar = c(1, 4, 0, 0) + 0.1)
+xlength <- c(3, 0.9, 1.0, 1.1)
+errbar(x = xlength, y = f$estimates,
+   yplus = f$estimates + crit * f$std.err.,
+   yminus = f$estimates - crit * f$std.err.,
+   axes = FALSE, xlim = c(0, 3),
+   ylab = "change in mean fitness",
+   pch = NA_integer_)
+box()
+axis(side = 2)
+arrows(x0 = rep(0, 4), x1 = xlength, y0 = rep(0, 4),
+   y1 = f$estimates)
+
+# now have to do extraordinarily painful calculation of angles to rotate text
+par.pin <- par("pin")
+par.plt <- par("plt")
+par.usr <- par("usr")
+par.plt <- c(diff(par.plt[1:2]), diff(par.plt[3:4]))
+par.usr <- c(diff(par.usr[1:2]), diff(par.usr[3:4]))
+foo <- par.pin * par.plt / par.usr
+foo
+angles <- atan(f$estimates / xlength * foo[2] / foo[1]) / pi * 180
+angles
+radians <- 2 * pi * angles / 360
+cos(radians)
+sin(radians)
+delta.text <- 0.2
+x <- xlength
+y <- f$estimates
+n <- names(y)
+for (i in seq_along(f$estimates))
+    text(x = x[i] / 2 - sin(radians[i]) * delta.text / foo[1],
+    y = y[i] / 2 + cos(radians[i]) * delta.text / foo[2],
+    labels = n[i], col = "darkgray", srt = angles[i])
 ```
 
 # References
