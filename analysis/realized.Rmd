@@ -596,8 +596,11 @@ change.offspring <- mclapply(moo.offspring, function(x)
 }))
 ```
 
+```{r translate, echo = FALSE}
+site.translate <- c(CS = "CERA", GC = "Grey Cloud Dunes", KW = "McCarthy Lake")
+```
 Turn these into tables
-```{r change-tables}
+```{r doit}
 doit <- function(w, cap, lab) {
     e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
     se <- lapply(w, function(x) lapply(x, function(y) y$vcov)) |> unlist() |>
@@ -612,12 +615,14 @@ doit <- function(w, cap, lab) {
     kbl(foo, caption = cap, label = lab,
         format = "latex", escape = FALSE, booktabs = TRUE, digits = 4) |>
         kable_styling() |>
-        pack_rows("Grey Cloud Dunes", min(site.gc), max(site.gc),
+        pack_rows(site.translate["GC"], min(site.gc), max(site.gc),
             indent = FALSE) |>
-        pack_rows("McCarthy Lake", min(site.kw), max(site.kw),
+        pack_rows(site.translate["KW"], min(site.kw), max(site.kw),
             indent = FALSE) |>
-        pack_rows("CERA", min(site.cs), max(site.cs), indent = FALSE)
+        pack_rows(site.translate["CS"], min(site.cs), max(site.cs),
+            indent = FALSE)
 }
+```{r change-tables}
 doit(change.parents, "Change in Mean Fitness Due to Selection in Parents",
     "changeParents")
 doit(change.offspring, "Change in Mean Fitness Due to Selection in Offspring",
@@ -670,6 +675,7 @@ Here is our function to compute estimates of interest.
     \text{mean}\left(\mu_\text{off} \cdot
     \frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}\right)
     - \text{mean}(\mu_\text{prev})
+    (\#eq:total)
     \end{equation}
     offspring mean fitness weighted by relative fitness of their parent
     (because in the experiment offspring were not planted according to
@@ -683,6 +689,7 @@ and this is divided into
     \bar{\mu}_\text{selection} =
     \text{mean}\left[\left(\frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}
     - 1\right) \cdot \mu_\text{prev} \right]
+    (\#eq:selection)
     \end{equation}
     parental mean fitness weighted by relative fitness minus one (this all
     takes place in the parental sample).
@@ -691,6 +698,7 @@ and this is divided into
     \begin{equation}
     \bar{\mu}_\text{environment} =
     \text{mean}(\mu_\text{par}) - \text{mean}(\mu_\text{prev})
+    (\#eq:environment)
     \end{equation}
     difference between pedigreed individuals (which are full sibs) in different
     years.  (Of course, this includes some genetic change because full sibs
@@ -704,6 +712,7 @@ and this is divided into
     \bar{\mu}_\text{total} -
     \bar{\mu}_\text{selection} -
     \bar{\mu}_\text{environment}
+    (\#eq:residual)
     \end{equation}
 
 ```{r foo}
@@ -754,7 +763,7 @@ fout[[1]][[2]]
 
 Now make a table for this.
 ```{r footab}
-doit <- function(w) {
+doit.too <- function(w) {
     e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
     se <- lapply(w, function(x) lapply(x, function(y) y$std.err.)) |> unlist()
     foo <- cbind(estimates = e, std.err. = se)
@@ -770,33 +779,34 @@ doit <- function(w) {
     kbl(foo, caption = "Estimates of Change in Mean Fitness", label = "decomp",
         format = "latex", escape = FALSE, booktabs = TRUE, digits = 4) |>
         kable_styling() |>
-        pack_rows("Grey Cloud Dunes, 2015-2016",
+        pack_rows(paste(site.translate["GC"], "2015-2016"),
             min(which(site.gc & year.2016)),
             max(which(site.gc & year.2016)),
             indent = FALSE) |>
-        pack_rows("Grey Cloud Dunes, 2016-2017",
+        pack_rows(paste(site.translate["GC"], "2016-2017"),
             min(which(site.gc & year.2017)),
             max(which(site.gc & year.2017)),
             indent = FALSE) |>
-        pack_rows("McCarthy Lake, 2015-2016",
+        pack_rows(paste(site.translate["KW"], "2015-2016"),
             min(which(site.kw & year.2016)),
             max(which(site.kw & year.2016)),
             indent = FALSE) |>
-        pack_rows("McCarthy Lake, 2016-2017",
+        pack_rows(paste(site.translate["KW"], "2016-2017"),
             min(which(site.kw & year.2017)),
             max(which(site.kw & year.2017)),
             indent = FALSE) |>
-        pack_rows("CERA, 2015-2016",
+        pack_rows(paste(site.translate["CS"], "2015-2016"),
             min(which(site.cs & year.2016)),
             max(which(site.cs & year.2016)),
             indent = FALSE) |>
-        pack_rows("CERA, 2016-2017",
+        pack_rows(paste(site.translate["CS"], "2016-2017"),
             min(which(site.cs & year.2017)),
             max(which(site.cs & year.2017)),
             indent = FALSE)
 }
-doit(fout)
+doit.too(fout)
 ```
+The code chunk above makes Table \@ref(tab:decomp).
 
 # Plotting the Decomposition
 
@@ -824,15 +834,16 @@ cap <- paste0("Estimates in Table 3 with Error Bars.",
    "  Horizontal coordinate is meaningless, but short vectors add up",
    " to long vector.",
    "  Vertical bars are approximate 95% confidence intervals.",
-   "  Site is ", site, ".",
+   "  Site is ", site.translate[site], ".",
    "  Total is difference of parents (", year.before, ") and offspring (",
    year, ").",
    "  Selection is difference due to selection in parents (", year.before, ").",
    "  Environmental is difference due to different environments in the",
    " two years: difference of parents (", year.before, ") and full sibs grown",
-   " along with offspring.",
-   "  Residual is Total - Selection - Environmental, mostly genetic change",
-   " not due to selection in parents or gene-environment interaction.")
+   " along with offspring (", year, ").",
+   "  Residual is Total $-$ Selection $-$ Environmental, mostly genetic change",
+   " not due to selection in parents or gene-environment or gene-gene",
+   " interaction.")
 ```
 ```{r plot, fig.align="center", fig.cap=cap}
 par(mar = c(1, 4, 0, 0) + 0.1)
@@ -869,6 +880,174 @@ for (i in seq_along(f$estimates))
     text(x = x[i] / 2 - sin(radians[i]) * delta.text / foo[1],
     y = y[i] / 2 + cos(radians[i]) * delta.text / foo[2],
     labels = n[i], col = "darkgray", srt = angles[i])
+```
+
+Rather than just continue here with the other plots, we move them to a
+[later section](#more-plots).
+
+# Fitness (Rather than Change Therein)
+
+In this section we revisit change in mean fitness \@ref(eq:total) above,
+and separately calculate the two mean fitnesses that it is the difference of.
+These are the mean fitness of the parental generation
+\begin{equation}
+   \text{mean}(\mu_\text{prev})
+    (\#eq:parent)
+\end{equation}
+and the mean fitness of the offspring generation
+\begin{equation}
+    \text{mean}\left(\mu_\text{off} \cdot
+    \frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}\right)
+    (\#eq:offspring)
+\end{equation}
+
+Then we follow the pattern of
+Section \@ref(change-in-mean-fitness-due-to-selection) above
+*mutatis mutandis*.
+
+## Parents
+
+First we apply \@ref(eq:parent) to all parental experiments (all years,
+whether they were followed by offspring or not).
+```{r fitness.parents, cache=TRUE, dependson="moo.parents"}
+fitness.parents <- mclapply(moo.parents, function(x) mclapply(x, function(y) {
+    e <- y$estimates
+    grad <- rep(1 / length(e), length(e)) # this is easy calculus
+    my.vcov <- t(grad) %*% y$vcov %*% grad
+    return(list(estimates = mean(e), vcov = my.vcov))
+}))
+```
+
+We make a table for this like Table \@ref(tab:changeParents).
+The table we are making is Table \@ref(tab:fitnessParents).
+```{r fitness-parents-table}
+doit(fitness.parents, "Mean Fitness of Parental Populations", "fitnessParents")
+```
+
+## Offspring
+
+Now we apply \@ref(eq:offspring) to all offspring experiments.
+Since this also involves parent data, we are following Section
+\@ref(comparison-of-mean-fitness-in-parents-and-offspring) *mutatis mutandis*
+for this calculation.
+
+First we redefine R function `foo` above to calculate offspring fitness
+```{r fitness-offspring-foo}
+foo <- function(theta) {
+    stopifnot(is.atomic(theta))
+    stopifnot(is.vector(theta))
+    stopifnot(is.numeric(theta))
+    stopifnot(is.finite(theta))
+    stopifnot(length(theta) %% 3 == 0)
+    nmu <- length(theta) %/% 3
+    is.prev <- seq_along(theta) <= nmu
+    is.off <- seq_along(theta) > 2 * nmu
+    is.par <- (! (is.prev | is.off))
+    mu.prev <- theta[is.prev]
+    mu.par <- theta[is.par]
+    mu.off <- theta[is.off]
+    
+    sum(mu.off * mu.prev) / sum(mu.prev)
+}
+```
+
+Then we repeat Section
+\@ref(comparison-of-mean-fitness-in-parents-and-offspring) above
+except for using the `foo` defined here rather than the `foo` defined there.
+```{r fitness-offspring, cache=TRUE, dependson="re-arrange"}
+fitness.offspring <- mclapply(redata, function(x) mclapply(x, function(y) {
+    e <- foo(y$estimates)
+    jack <- jacobian(foo, y$estimates)
+    my.vcov <- jack %*% y$vcov %*% t(jack)
+    list(estimates = e, vcov = as.matrix(my.vcov))
+}))
+```
+(We changed the second component of the result from `std.err.` to `vcov`
+in order to match the parental calculation.  The reason for the `as.matrix`
+is to convert a sparse matrix from R package `Matrix` into an ordinary
+(core R) matrix.)
+
+But our table is done by the same code as for the table for
+parents in this section.
+The table we are making is Table \@ref(tab:fitnessOffspring).
+```{r fitness-offspring-table, error=TRUE}
+doit(fitness.offspring, "Mean Fitness of Offspring Populations",
+    "fitnessOffspring")
+```
+
+
+# More Plots
+
+We ought to use a loop here but R markdown does not seem to be up to the
+task.  So we use five more code chunks, which we hide.
+```{r plot-setup-GC-2017, echo=FALSE, results="hide"}
+site <- "GC"
+year <- "2017"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+```{r plot-caption-GC-2017, echo=FALSE}
+<<plot-caption>>
+```
+```{r plotGC2017, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+<<plot>>
+```
+
+```{r plot-setup-CS-2016, echo=FALSE, results="hide"}
+site <- "CS"
+year <- "2016"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+```{r plot-caption-CS-2016, echo=FALSE}
+<<plot-caption>>
+```
+```{r plotCS2016, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+<<plot>>
+```
+
+```{r plot-setup-CS-2017, echo=FALSE, results="hide"}
+site <- "CS"
+year <- "2017"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+```{r plot-caption-CS-2017, echo=FALSE}
+<<plot-caption>>
+```
+```{r plotCS2017, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+<<plot>>
+```
+
+```{r plot-setup-KW-2016, echo=FALSE, results="hide"}
+site <- "KW"
+year <- "2016"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+```{r plot-caption-KW-2016, echo=FALSE}
+<<plot-caption>>
+```
+```{r plotKW2016, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+<<plot>>
+```
+
+```{r plot-setup-KW-2017, echo=FALSE, results="hide"}
+site <- "KW"
+year <- "2017"
+year.before <- as.character(as.numeric(year) - 1)
+f <- fout[[site]][[year]]
+names(f)
+```
+```{r plot-caption-KW-2017, echo=FALSE}
+<<plot-caption>>
+```
+```{r plotKW2017, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
+<<plot>>
 ```
 
 # References
