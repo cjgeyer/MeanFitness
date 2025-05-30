@@ -626,8 +626,8 @@ which can also be written
    (\#eq:breeder-one)
 \end{equation}
 (the difference between `sum` and `mean` is a factor of `n` (the length of
-the vectors $\theta$ and $\mu$ and this cancels in the numerator and
-denominator in going from one to the other).
+the vectors $\theta$ and $\mu$) and this cancels in the numerator and
+denominator in going from one to the other.
 
 ## Equivalent Definitions
 
@@ -677,7 +677,7 @@ a weighted average, we call $\mu$ the *unnormalized* weight vector and
 $\mu / \mathop{\rm sum}(\mu)$ the *normalized* weight vector.
 
 So \@ref(eq:breeder-zero) is just the difference between a weighted average
-of $\theta$ and a simple average or $\theta$ with $\mu$ as the unnormalized
+of $\theta$ and a simple average of $\theta$ with $\mu$ as the unnormalized
 weight vector.
 
 ## The Tricky Bit
@@ -1058,6 +1058,15 @@ for (i in seq_along(f$estimates))
     y = y[i] / 2 + cos(radians[i]) * delta.text / foo[2],
     labels = n[i], col = "darkgray", srt = angles[i])
 ```
+
+We might want to say that the arrow labeled "selection" occurs earlier
+than the other two arrows, but the endpoints of the arrows are not points
+in time.  The arrow labeled "total" is the difference in fitness in the
+"parents" which takes the entire first year to play out and in the "offspring"
+which takes the entire second year to play out.  Ditto for the arrow labeled
+"environment".  But the arrow labeled "selection" describes what happens
+only in the "parents" which plays out in the first year.  So the arrow
+labeled "residual" is even more complicated.
 
 Rather than just continue here with the other plots, we move them to a
 [later section](#more-plots).
