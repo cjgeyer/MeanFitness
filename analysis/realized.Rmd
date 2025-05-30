@@ -98,7 +98,7 @@ library("Matrix")
 library("parallel")
 options("mc.cores" = detectCores())
 library("kableExtra")
-library("Hmisc")
+suppressMessages(library("Hmisc"))
 ```
 
 Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
@@ -514,7 +514,7 @@ map.factory <- function(rout) {
 
 R function `map.factory` has one argument, an object of class `reaster`
 produced by a call to R function `reaster` and produces a function with
-one argument, which is a vector $\theta = (\alpha, c, \sigma)$ that contains
+one argument, which is a vector $\theta = (\alpha, b, \nu)$ that contains
 the variables (fixed effects, standardized random effects, and standard
 deviation components), and that produced function returns
 mean fitness estimates for one individual from each "family" (sire for
@@ -531,10 +531,12 @@ map <- map.factory(rout)
 map(alphabeenu)
 ```
 
-## Apply To Parents
+## Apply To Parents {#delta}
 
 In hindsight, we did not want to apply R generic function `vcov` as
-we did above to make a separate list.  So we do it again here.
+we did above to make a separate list.  (We could use R function `mapply`
+to work on multiple parallel lists, but don't choose to.)  So we do it
+again here.
 ```{r moo.parents, cache=TRUE, dependson="reaster.parents"}
 moo.parents <- mclapply(rout.parents, function(x) mclapply(x, function(y) {
     map <- map.factory(y)
@@ -547,6 +549,30 @@ moo.parents <- mclapply(rout.parents, function(x) mclapply(x, function(y) {
     return(list(estimates = estimates, vcov = vcov.estimates))
 }))
 ```
+
+In the above code we are applying the delta method for differentiable
+functions of asymptotically normal estimators.  If $\hat{\theta}$ is
+asymptotically normal with variance given by R function `vcov` and $g$
+is a differentiable function, then the asymptotic variance of $g(\hat{\theta})$
+is given by
+$$
+   J \mathop{\rm vcov}(\hat{\theta}) J^T
+$$
+which is computed by the line
+```
+    vcov.estimates <- jack %*% vcov.base %*% t(jack)
+```
+in the code above.  And we do not calculate the derivative matrix, also
+called Jacobian matrix, by calculus, but rather let the computer do it for
+us (numerically) using R function `jacobian` from R package `numDeriv`.
+
+If you want to replace the function being used here (the $g$ we are talking
+about is here implemented by R function `map`) by some other function, just
+do it.  The delta method is valid for any differentiable function.
+
+You replace R function `map` in both places it occurs (in computing R vector
+`estimates` and in computing R matrix `jack`) with your R function that
+calculates some other estimator.
 
 ## Apply To Offspring
 
@@ -566,20 +592,123 @@ moo.offspring <- mclapply(rout.offspring, function(x) mclapply(x, function(y) {
 
 # Change in Mean Fitness Due to Selection
 
-This is one of the main quantities of scientific interest, and the others
-are related to this.  For each vector $\mu$ returned by R function `map`
-we turn it into *relative fitness* by dividing by the mean.
-This is fitness "after selection but before reproduction".
-We compare this with fitness
-before selection, which is equal across families.  So the estimate of interest
-is `mean(mu * (mu / mean(mu) - 1))`
+## Definition
+
+One of the main quantities of scientific interest, and the other quantites
+we calculate are related to it, is the part of the change in mean fitness
+in one generation that Fisher's fundamental theorem (FFTNS) addresses.
+
+This quantity is very simple in some respects and a bit tricky in other
+respects.  We start with the "breeder's equation" (also called
+the Robertson-Price equation).  What does natural selection do?  It changes
+frequencies of genotypes (or phenotypes) from what they were before selection
+to the same thing multiplied by fitness normalized to be a probability vector,
+that is, if $\theta$ are the frequencies before selection and $\mu$ is
+(expected) fitness, then
+$$
+   \theta \cdot \frac{\mu}{\text{sum}(\mu)}
+$$
+are the frequencies after selection.  And the change in fitness is
+$$
+   \theta \cdot \frac{\mu}{\text{sum}(\mu)} - \theta
+$$
+and the change in mean fitness is the mean of the above
+\begin{equation}
+   \mathop{\rm sum}\left(\theta \cdot \frac{\mu}{\mathop{\rm sum}(\mu)}\right)
+   -
+   \mathop{\rm mean}(\theta)
+   (\#eq:breeder-zero)
+\end{equation}
+which can also be written
+\begin{equation}
+   \text{mean}\left(\theta \cdot \frac{\mu}{\text{mean}(\mu)}\right) -
+   \text{mean}(\theta)
+   (\#eq:breeder-one)
+\end{equation}
+(the difference between `sum` and `mean` is a factor of `n` (the length of
+the vectors $\theta$ and $\mu$ and this cancels in the numerator and
+denominator in going from one to the other).
+
+## Equivalent Definitions
+
+This does not look like all treatments of the breeder's equation.  Often
+one sees the covariance operator used.  For any random variables $X$ and $Y$
+$$
+   \mathop{\rm cov}(X, Y) = E(X Y) - E(X) E(Y)
+$$
+and in the special case $E(Y) = 1$ this becomes
+$$
+   \mathop{\rm cov}(X, Y) = E(X Y) - E(X)
+$$
+and in \@ref(eq:breeder-one) we have arranged that the random variable
+$Y = \mu / \text{mean}(\mu)$ does have mean one by the simple expedient
+of dividing $\mu$ by its mean.  Thus \@ref(eq:breeder-one) is equivalent to
+\begin{equation}
+   \text{cov}\left(\theta, \frac{\mu}{\text{mean}(\mu)}\right)
+   (\#eq:breeder-two)
+\end{equation}
+This is shorter, but we think it obscures the logic.  For those who like
+their math mysterious, \@ref(eq:breeder-two) is better.
+
+Equation \@ref(eq:breeder-two) can be made even more mysterious by introducing
+the term *relative fitness* for $\mu / \mathop{\rm mean}(\mu)$ so it becomes
+\begin{equation}
+   \text{cov}\left(\text{trait}, \text{relative fitness}\right)
+   (\#eq:breeder-too-too)
+\end{equation}
+
+## Weighted Averages
+
+We think it is less obscure to go back to \@ref(eq:breeder-zero) and introduce
+the notion of *weighted average*.   A *weighted average* of a vector $\theta$
+is
+\begin{equation}
+   \sum\nolimits_i \theta_i p_i
+   (\#eq:weighted-average)
+\end{equation}
+where $p$ is a probability vector, that is, its components $p_i$ are
+nonnegative and sum to one.  A simple average is the special case where
+$p_i = 1 / n$ for all $i$ where $n$ is the length of $\theta$ and $p$.
+
+Another helpful concept is that of *unnormalized weights*.  If $\mu$ is
+a vector with nonnegative components, then $\mu / \mathop{\rm sum}(\mu)$
+is a probability vector.  When we use this probability vector to make
+a weighted average, we call $\mu$ the *unnormalized* weight vector and
+$\mu / \mathop{\rm sum}(\mu)$ the *normalized* weight vector.
+
+So \@ref(eq:breeder-zero) is just the difference between a weighted average
+of $\theta$ and a simple average or $\theta$ with $\mu$ as the unnormalized
+weight vector.
+
+## The Tricky Bit
+
+Now we want to apply this logic where the trait $\theta$ under discussion
+is fitness itself.  So we set $\theta = \mu$ giving
+\begin{equation}
+   \mathop{\rm mean}\left(\mu \cdot \frac{\mu}{\text{mean}(\mu)}\right) -
+   \text{mean}(\mu)
+   (\#eq:breeder-moo)
+\end{equation}
+
+## Too Long, Didn't Read
+
+Whether one regards all of the above as trivial, deep, clear, or confusing,
+it is the only bit of math we know of that addresses the question.
+@lande-arnold discuss three different ways to express the same concept under
+certain assumptions (which are further discussed in @lande-arnold-tr) but
+this does not change the concept that \@ref(eq:breeder-one) expresses.
+Or \@ref(eq:breeder-moo) expresses.
+
+## Application
 
 We make this into a function so we can differentiate it numerically.
 ```{r change}
 fitness_change <- function(mu) mean(mu * (mu / mean(mu) - 1))
 ```
 
-Now we apply this function to parents and offspring.
+### Parents {#delta-grad}
+
+Now we apply this function to parents
 ```{r change.parents, cache=TRUE, dependson="moo.parents"}
 change.parents <- mclapply(moo.parents, function(x) mclapply(x, function(y) {
     grad <- grad(fitness_change, y$estimates)
@@ -587,6 +716,22 @@ change.parents <- mclapply(moo.parents, function(x) mclapply(x, function(y) {
     return(list(estimates = fitness_change(y$estimates), vcov = my.vcov))
 }))
 ```
+
+Here we do the delta method slightly differently than in Sections \@ref(delta)
+above and \@ref(r-function) below where we use R function `jacobian` from R
+package `numDeriv`.  Here (for no particular reason) we use R function `grad`
+from the same package.  R function `jacobian` differentiates vector-to-vector
+functions.  R function `grad` differentiates vector-to-scalar functions.
+When both are applied to a vector-to-scalar function (which is OK because
+R cannot tell the difference between scalars and vectors of length one),
+`jacobian` produces a matrix with one row and `grad` produces a vector.
+This means we put the transpose in a different place when calculating `my.cov`.
+If we had used R function `jacobian` instead, we could have made this
+code look like our other examples.
+
+### Offspring
+
+And offspring
 ```{r change.offspring, cache=TRUE, dependson="moo.offspring"}
 change.offspring <- mclapply(moo.offspring, function(x)
     mclapply(x, function(y) {
@@ -596,10 +741,14 @@ change.offspring <- mclapply(moo.offspring, function(x)
 }))
 ```
 
-```{r translate, echo = FALSE}
+## Tables
+
+First we map site keys to site names.
+```{r translate}
 site.translate <- c(CS = "CERA", GC = "Grey Cloud Dunes", KW = "McCarthy Lake")
 ```
-Turn these into tables
+
+Turn the calculations above into tables
 ```{r doit}
 doit <- function(w, cap, lab) {
     e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
@@ -622,14 +771,23 @@ doit <- function(w, cap, lab) {
         pack_rows(site.translate["CS"], min(site.cs), max(site.cs),
             indent = FALSE)
 }
-```{r change-tables}
+```
+
+The following makes Table \@ref(tab:changeParents) below.
+```{r change-table-parents}
 doit(change.parents, "Change in Mean Fitness Due to Selection in Parents",
     "changeParents")
+```
+
+The following makes Table \@ref(tab:changeOffspring) below.
+```{r change-table-offspring}
 doit(change.offspring, "Change in Mean Fitness Due to Selection in Offspring",
     "changeOffspring")
 ```
 
 # Comparison of Mean Fitness in Parents and Offspring
+
+## Re-arrange Data
 
 Now we want to make inter-dataset comparisons and inter-year comparisons.
 To continue with functional programming we need to temporarily step outside
@@ -667,9 +825,22 @@ for (site in names(moo.offspring)) {
 }
 ```
 
-Here is our function to compute estimates of interest.
+We say that offspring are in the same "family" as parental individuals
+(pedigreed crosses, whether parents of these offspring or not) if the
+grandsire of the offspring (the maternal grandsire since sires of offspring
+are unknown) is the same as the sire of a parental (pedigreed) individual.
+The code in the function involving R vector `idx` is there to make the
+estimates and variance-covariance matrices for offspring match those for
+"parents".  We have estimates for each "family" regardless of whether that
+"family" occurs in the offspring (was planted in the offspring experiment)
+or not.  Fitness is "estimated" to be zero for those families that do not
+occur in the data (were not planted).
 
-  * total change in mean fitness over two years
+## Functions of Interest
+
+We calculate four functions of interest.
+
+  * total change in mean fitness (parents to offspring)
     \begin{equation}
     \bar{\mu}_\text{total} =
     \text{mean}\left(\mu_\text{off} \cdot
@@ -681,18 +852,16 @@ Here is our function to compute estimates of interest.
     (because in the experiment offspring were not planted according to
     their frequency, so we must correct for that)
 
-and this is divided into
+Which is divided into
 
   * change due to selection (what Fisher's fundamental theorem of
     natural selection is supposed to predict) in the parents
-    \begin{equation}
-    \bar{\mu}_\text{selection} =
-    \text{mean}\left[\left(\frac{\mu_\text{prev}}{\text{mean}(\mu_\text{prev})}
-    - 1\right) \cdot \mu_\text{prev} \right]
-    (\#eq:selection)
-    \end{equation}
-    parental mean fitness weighted by relative fitness minus one (this all
-    takes place in the parental sample).
+    given by \@ref(eq:breeder-moo) above.  In this case
+\begin{equation}
+   \mathop{\rm mean}\left(\mu_\text{prev} \cdot \frac{\mu_\text{prev}}{\mathop{\rm mean}(\mu_\text{prev})}\right) -
+   \mathop{\rm mean}(\mu_\text{prev})
+   (\#eq:breeder-moo-prev)
+\end{equation}
 
   * environmental change
     \begin{equation}
@@ -714,7 +883,13 @@ and this is divided into
     \bar{\mu}_\text{environment}
     (\#eq:residual)
     \end{equation}
+    This may involve recombination, gene-environment interaction,
+    gene-gene interaction or anything else not accounted for in
+    additive effects of selection and environment.
 
+## R Function
+
+Here is our function to compute estimates of interest.
 ```{r foo}
 foo <- function(theta) {
     stopifnot(is.atomic(theta))
@@ -755,6 +930,9 @@ fout <- mclapply(redata, function(x) mclapply(x, function(y) {
     list(estimates = e, std.err. = sqrt(as.vector(diag(my.vcov))))
 }))
 ```
+
+Our use of the delta method here is just like in Section \@ref(delta)
+above, where it was explained.
 
 Look at one, just to see we are OK.
 ```{r foo.doit.look}
@@ -806,12 +984,12 @@ doit.too <- function(w) {
 }
 doit.too(fout)
 ```
-The code chunk above makes Table \@ref(tab:decomp).
+The code chunk above makes Table \@ref(tab:decomp) below.
 
 # Plotting the Decomposition
 
 We are going to try to show these numbers and standard errors in a plot.
-We will just do one example.
+We will just do one example in this section.
 ```{r plot-site-year}
 site <- "GC"
 year <- "2016"
@@ -828,7 +1006,6 @@ crit <- qnorm((1 + conf.level) / 2)
 
 The horizontal length of the arrows in this plot are entirely meaningless.
 They have to be different because we don't want the error bars to overlap.
-Table \@ref(tab:decomp)
 ```{r plot-caption}
 cap <- paste0("Estimates in Table 3 with Error Bars.",
    "  Horizontal coordinate is meaningless, but short vectors add up",
@@ -917,6 +1094,9 @@ fitness.parents <- mclapply(moo.parents, function(x) mclapply(x, function(y) {
     return(list(estimates = mean(e), vcov = my.vcov))
 }))
 ```
+
+Here we are using R function `grad` in the delta method like we explained
+in Section \@ref(delta-grad) above.
 
 We make a table for this like Table \@ref(tab:changeParents).
 The table we are making is Table \@ref(tab:fitnessParents).
