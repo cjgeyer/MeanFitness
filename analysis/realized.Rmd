@@ -106,8 +106,10 @@ to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3-4") >= 0)
 ```
-This version is now on CRAN so can be downloaded using R function
-`install.packages` or the equivalent my mousing around in the menus of some app.
+This version is now on CRAN (https://cran.r-project.org/package=aster)
+so can be downloaded using R function
+`install.packages` or the equivalent by mousing around in the menus
+of some app.
 
 ```{r checkerrors, echo=FALSE}
 # make all code chunks after this one have option error=TRUE
@@ -289,7 +291,7 @@ lapply(rout.parents, function(x) sapply(x, function(x) x$nu))
 ```
 One case where block effects are estimated to be zero,
 but all cases have parental effects estimated to be nonzero,
-which is what we want.
+which justifies further consideration of genetic effects.
 
 ## Offspring
 
@@ -384,7 +386,11 @@ present).  Here the answer is the fourth of five.
 
 Now we have to deal with the problem that the only R function we have that
 maps from canonical to mean value parameters is R function `predict.aster`
-and we need to give it an object of class `"aster"`.  So we fake one.
+and we need to give it an object of class `"aster"`.  So we make one "by hand"
+rather than by invocation of R function `aster`.  The simplest way to do that
+is to start with an already existing object of class `"aster"` that was
+produced by R function `aster` (which is found in our object
+of class `"reaster"`) and modify it as needed.
 Here we only want the random effects that have the string `"paternalID"`
 in their names (that is, either paternalID or grandpaternalID).
 ```{r map-fake}
@@ -533,10 +539,12 @@ map(alphabeenu)
 
 ## Apply To Parents {#delta}
 
-In hindsight, we did not want to apply R generic function `vcov` as
-we did above to make a separate list.  (We could use R function `mapply`
-to work on multiple parallel lists, but don't choose to.)  So we do it
-again here.
+In hindsight, we did not want to apply R generic function `vcov`
+[as we did above](#asymptotic-variance-covariance-matrices-of-estimates)
+to make a separate list.  (We could use R function `mapply`
+to work on multiple parallel lists, but don't choose to.)
+So we invoke R function `vcov` again here, putting estimates and their
+variance-covariance matrices in the same list.
 ```{r moo.parents, cache=TRUE, dependson="reaster.parents"}
 moo.parents <- mclapply(rout.parents, function(x) mclapply(x, function(y) {
     map <- map.factory(y)
@@ -590,11 +598,11 @@ moo.offspring <- mclapply(rout.offspring, function(x) mclapply(x, function(y) {
 }))
 ```
 
-# Change in Mean Fitness Due to Selection
+# Genetic Change in Mean Fitness Due to Selection {#fftns-change}
 
 ## Definition
 
-One of the main quantities of scientific interest, and the other quantites
+One of the primary quantities of scientific interest, and the other quantites
 we calculate are related to it, is the part of the change in mean fitness
 in one generation that Fisher's fundamental theorem (FFTNS) addresses.
 
@@ -699,6 +707,14 @@ certain assumptions (which are further discussed in @lande-arnold-tr) but
 this does not change the concept that \@ref(eq:breeder-one) expresses.
 Or \@ref(eq:breeder-moo) expresses.
 
+In short, for each pedigreed cohort, we have obtained a vector $\mu$
+returned by R function `map`, which estimates family-specific mean
+absolute fitnesses.  To estimate overall mean fitness, we obtain a
+weighted sum of these $\mu$, using as weights, the relative fitness
+of each family, obtained by dividing $\mu$ by $\mathop{\rm mean}(\mu)$.
+We obtain the change in mean fitness by subtracting the mean fitness
+before selection, when families were equally represented.
+
 ## Application
 
 We make this into a function so we can differentiate it numerically.
@@ -775,13 +791,15 @@ doit <- function(w, cap, lab) {
 
 The following makes Table \@ref(tab:changeParents) below.
 ```{r change-table-parents}
-doit(change.parents, "Change in Mean Fitness Due to Selection in Parents",
+doit(change.parents,
+"Intragenerational Change in Mean Fitness Due to Selection on Parental Cohort",
     "changeParents")
 ```
 
 The following makes Table \@ref(tab:changeOffspring) below.
 ```{r change-table-offspring}
-doit(change.offspring, "Change in Mean Fitness Due to Selection in Offspring",
+doit(change.offspring,
+"Intragenerational Change in Mean Fitness Due to Selection on Offspring Cohort",
     "changeOffspring")
 ```
 
@@ -848,7 +866,8 @@ We calculate four functions of interest.
     - \text{mean}(\mu_\text{prev})
     (\#eq:total)
     \end{equation}
-    offspring mean fitness weighted by relative fitness of their parent
+    offspring family mean fitness weighted by relative fitness of their
+    family in the parental generation
     (because in the experiment offspring were not planted according to
     their frequency, so we must correct for that)
 
@@ -871,8 +890,9 @@ Which is divided into
     \end{equation}
     difference between pedigreed individuals (which are full sibs) in different
     years.  (Of course, this includes some genetic change because full sibs
-    are not clones.  But it does directly estimate the change due to different
-    environments in the two years.)
+    are not clones.  But it does unbiasedly estimate the change due to different
+    environments in the two years because the individuals are random samples
+    from their pedigreed families.)
 
   * residual change, the part of the total change not due to environment
     or selection
@@ -1088,7 +1108,7 @@ and the mean fitness of the offspring generation
 \end{equation}
 
 Then we follow the pattern of
-Section \@ref(change-in-mean-fitness-due-to-selection) above
+Section \@ref(fftns-change) above
 *mutatis mutandis*.
 
 ## Parents
