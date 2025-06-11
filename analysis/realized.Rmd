@@ -35,9 +35,10 @@ to the next, for comparison with the prediction from Fisher's
 Fundamental Theorem of Natural Selection (FFTNS).
 We divide change in mean fitness in one generation
 into three parts:
-that due to change in genetic composition described by FFTNS,
-that due to change in genetic composition not described by FFTNS, and
-that due to change in environment.
+that due to change in genetic composition described by FFTNS
+(intragenerational change in mean additive genetic effects for fitness),
+that due to change in genetic composition not described by FFTNS (everything
+else at least partially genetic), and that due to change in environment.
 Here, we obtain estimates of a) mean fitness of the pedigreed parental
 populations before selection (previously presented in @kulbaba-et-al and its
 correction); b) mean fitness of the pedigreed parental population after
@@ -110,6 +111,10 @@ This version is now on CRAN (https://cran.r-project.org/package=aster)
 so can be downloaded using R function
 `install.packages` or the equivalent by mousing around in the menus
 of some app.
+
+A later version 1.3-5 was required by CRAN to fix some test output, but did not
+affect any functions in the package or their documentation.  So we do not
+need that version.  It was for CRAN's benefit only.
 
 ```{r checkerrors, echo=FALSE}
 # make all code chunks after this one have option error=TRUE
@@ -1004,7 +1009,7 @@ doit.too <- function(w) {
 }
 doit.too(fout)
 ```
-The code chunk above makes Table \@ref(tab:decomp) below.
+The code chunk above makes Table \@ref(tab:decomp) on this page.
 
 # Plotting the Decomposition
 
@@ -1079,6 +1084,7 @@ for (i in seq_along(f$estimates))
     labels = n[i], col = "darkgray", srt = angles[i])
 ```
 
+The plot made is Figure \@ref(fig:plot) below.
 We might want to say that the arrow labeled "selection" occurs earlier
 than the other two arrows, but the endpoints of the arrows are not points
 in time.  The arrow labeled "total" is the difference in fitness in the
