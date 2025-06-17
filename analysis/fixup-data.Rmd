@@ -288,7 +288,7 @@ lapply(data.primary, function(x)
 So we need to fix up these inconsistencies.
 ```{r consistency.fixup}
 data.primary <- lapply(data.primary, function(x)
-    transform(x, total.pods.collected = pmin(total.pods, total.pods.collected)))
+    transform(x, total.pods = pmax(total.pods, total.pods.collected)))
 ```
 And recheck.
 ```{r check.constraint.again}
