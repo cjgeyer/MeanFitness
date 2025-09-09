@@ -1,11 +1,11 @@
 ---
 title: "Estimates of Realized Response to Selection in *Chamaecrista fasciculata* and Decomposition into Environmental and Genetic Parts"
 author:
+  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
   - "Mason W. Kulbaba^[St. Mary's University, mason.kulbaba@stmu.ca, https://orcid.org/0000-0003-0619-7089]"
   - "Seema N. Sheth^[Department of Plant and Microbial Biology, North Carolina State University, ssheth3@ncsu.edu, https://orcid.org/0000-0001-8284-7608]"
   - "Rachel E. Pain^[Ecology, Evolution and Behavior Graduate Program, University of Minnesota, repain@umn.edu]"
   - "Vincent M. Eckhart^[Department of Biology, Grinnell College, eckhart@grinnell.edu]"
-  - "Charles J. Geyer^[School of Statistics, University of Minnesota, geyer@umn.edu, https://orcid.org/0000-0003-1471-1703]"
   - "Ruth G. Shaw^[Department of Ecology, Evolution and Behavior, University of Minnesota, shawx016@umn.edu, https://orcid.org/0000-0001-5980-9291]"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
@@ -91,6 +91,15 @@ which will be made public whenever a paper based on it is submitted.
  * The version of the `Hmisc` package used to make this document is
    `r packageVersion("Hmisc")`.
 
+ * The version of the `data.table` package used to make this document is
+   `r packageVersion("data.table")`.
+
+ * The version of the `flextable` package used to make this document is
+   `r packageVersion("flextable")`.
+
+ * The version of the `mcmc` package used to make this document is
+   `r packageVersion("mcmc")`.
+
 Attach packages.
 ```{r package}
 library("aster")
@@ -100,6 +109,9 @@ library("parallel")
 options("mc.cores" = detectCores())
 library("kableExtra")
 suppressMessages(library("Hmisc"))
+suppressMessages(library("flextable"))
+library("data.table")
+library("mcmc")
 ```
 
 Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
@@ -188,7 +200,8 @@ is the name of the conditional distribution of the successor variable
 given the predecessor variable.
 The arrow labeled `samp` is a subsampling arrow.  It is a Bernoulli
 arrow but the sampling is experimental rather than biological.
-This arrow may be [missing in some analyses](#alternative-structure).
+This arrow may be missing in some analyses
+(Section \@ref(alternative-structure) below).
 
 Set graphical model description in R.
 ```{r graph}
@@ -244,7 +257,7 @@ samp.offspring
 So no issues with this for offspring: all offspring generation analyses
 have subsampling.
 
-# Analyses with R Function Reaster
+# Analyses with R Function Reaster {#reaster}
 
 ## Parents
 
@@ -607,7 +620,7 @@ moo.offspring <- mclapply(rout.offspring, function(x) mclapply(x, function(y) {
 
 ## Definition
 
-One of the primary quantities of scientific interest, and the other quantites
+One of the primary quantities of scientific interest, and the other quantities
 we calculate are related to it, is the part of the change in mean fitness
 in one generation that Fisher's fundamental theorem (FFTNS) addresses.
 
@@ -1263,6 +1276,564 @@ names(f)
 ```
 ```{r plotKW2017, fig.align="center", fig.cap=cap, echo=FALSE, results="hide"}
 <<plot>>
+```
+
+# Write Out Stuff For Paper
+
+## To Do
+
+Table 1 for paper is Table \@ref(tab:fitnessParents) above.
+Except we also want post-selection mean fitness too.
+
+Table 2 for paper is Table \@ref(tab:fitnessOffspring) above.
+
+Table 3 for paper is Table \@ref(tab:decomp) above.
+Except FFTNS prediction should be included too.
+And For that we need to redo the calculation from @zenodo with correct
+standard errors (no infinite standard errors because we found the cause of
+that (Section \@ref(alternative-structure) above).
+
+Figure 1, six panels, error bars (or something similar) for
+selection, environment, residual, total (in that order left-to-right).
+No arrows.
+
+## New Table 1
+
+For this we need R object
+`fitness.parents` to have the numbers in \@ref(tab:fitnessParents).
+and the numbers that are the first term in (\@ref(eq:breeder-moo-prev))
+$$
+   \mathop{\rm mean}\left(\mu \cdot \frac{\mu}{\mathop{\rm mean}(\mu)}\right)
+$$
+```{r fitness.parents.after, cache=TRUE, dependson="moo.parents"}
+moo.after <- function(mu) mean(mu * mu / mean(mu))
+fitness.parents.after <- mclapply(moo.parents, function(x)
+    mclapply(x, function(y) {
+    e <- moo.after(y$estimates)
+    g <- grad(moo.after, y$estimates)
+    my.vcov <- drop(t(g) %*% y$vcov %*% g)
+    return(list(estimates = mean(e), vcov = my.vcov))
+}))
+
+doit.helper <- function(w, cap, lab) {
+    e <- lapply(w, function(x) lapply(x, function(y) y$estimates)) |> unlist()
+    se <- lapply(w, function(x) lapply(x, function(y) y$vcov)) |> unlist() |>
+        sqrt()
+    cbind(estimates = e, std.err. = se)
+}
+foo <- cbind(doit.helper(fitness.parents), doit.helper(fitness.parents.after))
+colnames(foo) <- c("e1", "s1", "e2", "s2")
+```
+Continue with code from R function `doit`.
+We have to stop using R package `kableExtra` because it does not work for
+Microsoft Word, which this document is not, but we eventually want to get to.
+So we switch to R package `flextable`.
+```{r ft.align="center", tab.cap="Mean Fitness of Parental Populations", label = "tab1"}
+set_flextable_defaults(fonts_ignore=TRUE)
+foot <- data.frame(foo) |>
+    (\(x) transform(x, site = substr(rownames(x), 1, 2)))() |>
+    (\(x) transform(x, year = substr(rownames(x), 4, 7)))() |>
+    transform(site = site.translate[site]) |>
+    transform(site = as.factor(site)) |>
+    as.data.table() |>
+    as_grouped_data(groups = c("site"),
+        columns = c("year", "e1", "s1", "e2", "s2")) |>
+    flextable() |>
+    set_header_labels(year = "Year", e1 = "Estimate", s1 = "Std. Error",
+        e2 = "Estimate", s2 = "Std. Error") |>
+    colformat_double(digits = 4) |>
+    add_header_row(colwidths = c(1, 1, 2, 2),
+        values = c("", "", "before selection", "after selection"))
+foot
+```
+OK.  Ship out to Microsoft Word.
+```{r table.one.to.word}
+foot <- set_caption(foot, "Mean Fitness of Parental Populations")
+save_as_docx(foot, path = "table1.docx")
+```
+
+What a struggle!  And we still have an inexplicable error
+(which does not show in the document, only as a compilation warning).
+
+## New Table 2
+
+Just like new table 1 except nothing extra to calculate.
+```{r ft.align="center", tab.cap="Mean Fitness of Offspring Populations", label = "tab2"}
+foot <- doit.helper(fitness.offspring) |>
+    as.data.frame() |>
+    (\(x) transform(x, site = substr(rownames(x), 1, 2)))() |>
+    (\(x) transform(x, year = substr(rownames(x), 4, 7)))() |>
+    transform(site = site.translate[site]) |>
+    transform(site = as.factor(site)) |>
+    as.data.table() |>
+    as_grouped_data(groups = c("site"),
+        columns = c("year", "estimates", "std.err.")) |>
+    flextable() |>
+    set_header_labels(year = "Year", estimates = "Estimate",
+        std.err. = "Std. Error") |>
+    colformat_double(digits = 4)
+foot
+```
+OK.  Ship out to Microsoft Word.
+```{r table.two.to.word}
+foot <- set_caption(foot, "Mean Fitness of Offspring Populations")
+save_as_docx(foot, path = "table2.docx")
+```
+
+## Recalculate Results from Evolution Correction
+
+### Differences Between this Paper Previous Ones
+
+We are going to redo some of the calculations of @zenodo in order to
+compare them with this paper.  The approaches are rather different.  Neither
+is wrong (except in one detail mentioned presently).  They are just addressing
+different (albeit related) things.
+
+In particular, @zenodo calculates the prediction from Fisher's fundamental
+theorem of natural selection (FFTNS), which is additive genetic variance for
+fitness divided by mean fitness.  In this paper, we do not (at least up to now)
+calculate any such thing.  Instead we calculate what this quantity (according
+to FFTNS) predicts, actual observed change in mean fitness.  This does not
+involve any variance (additive genetic or otherwise).
+
+The error in @zenodo is that some of these quantities had infinite standard
+errors, which is a mistake.  That is due solely to not recognizing
+(Section \@ref(alternative-structure) above) that some site-year combinations
+have subsampling and some do not have it, so we need to do different analyses
+(Section \@ref(reaster) above) for the different cases.
+
+### What Is To Be Done
+
+@zenodo, Section 12.3.2 (following @tr696) define
+an R function `map.too` that takes one vector argument `balpha` that
+decomposes into two parts,
+
+ * a scalar `b` which is the additive genetic effect for a single
+   hypothetical individual (not necessarily one in the observed data) and
+
+ * a vector `alpha` which is the fixed effects part of the random effects
+   aster model.
+
+To turn this from computer code to math, we let the R function `map.too`
+correspond to a mathematical function $f$ of two arguments, so $f(b, \alpha)$
+is the value of the function.  Then our FFTNS prediction is
+\begin{equation}
+   Q(\alpha, \nu) =
+   \left(\frac{\partial f(0, \alpha)}{\partial b}\right)^2
+   \cdot 4 \nu
+   \cdot \frac{1}{f(0, \alpha)}
+   (\#eq:fftns-point-estimate)
+\end{equation}
+where $\nu$ is the variance on the canonical parameter
+scale for parental random effects.
+
+We estimate this, of course, by plugging in MLE $Q(\hat{\alpha}, \hat{\nu})$.
+
+To calculate standard errors we need derivatives, which are given by
+@zenodo, Section 12.3.2
+\begin{align}
+   \frac{\partial Q(\alpha, \nu)}{\partial \alpha} & =
+   -
+   \left(\frac{\partial f(0, \alpha)}{\partial b}\right)^2
+   \cdot 4 \nu
+   \cdot \frac{1}{f(0, \alpha)^2}
+   \cdot \frac{\partial f(0, \alpha)}{\partial \alpha}
+   +
+   \frac{\partial f(0, \alpha)}{\partial b}
+   \cdot 8 \nu
+   \cdot \frac{1}{f(0, \alpha)}
+   \cdot \frac{\partial^2 f(0, \alpha)}{\partial b \partial \alpha}
+   (\#eq:fftns-derivative-alpha)
+   \\
+   \frac{\partial Q(\alpha, \nu)}{\partial \nu} & =
+   \left(\frac{\partial f(0, \alpha)}{\partial b}\right)^2
+   \cdot 4
+   \cdot \frac{1}{f(0, \alpha)}
+   (\#eq:fftns-derivative-nu)
+\end{align}
+
+### Another Function Factory
+
+Rather than exactly reproduce what @zenodo do, we combine our approach
+in Section \@ref(a-function-factory) above to make a function factory that
+produces a function that calculates the mathematical function $f$ described
+in the preceding section.
+
+As in Section \@ref(a-function-factory) above, we
+develop our function a little bit at a time and then assemble all
+the bits into the whole function.
+And. as in that section, we need an object to be the argument of that
+function to exercise our code bits on.
+```{r map-rout-too}
+names(rout.parents)
+rout <- rout.parents[[1]][[1]]
+rout <- rout.parents$GC[[1]]
+```
+
+Now we already have a lot of setup we can just repeat from Section
+\@ref(a-function-factory) above.
+```{r map-too-repeated-setup}
+<<map-setup>>
+<<map-subsampling>>
+<<map-fake>>
+<<map-extractors>>
+<<map-which-ind>>
+```
+
+But we also need a bit more setup, following R function `map.factory.too`
+in Section 12.3.2 of @zenodo.
+```{r map-too-setup-ifit}
+    alpha <- rout$alpha
+    ifit <- which(names(alpha) == "fit")
+    if (length(ifit) != 1)
+        stop("no fixed effect named fit")
+```
+
+Now we can just copy the function returned by the map factory from
+Section 12.3.2 of @zenodo.
+
+Again we write the code in the body of the function before the function itself,
+so we need an R object to serve as the function argument.
+```{r map-too-balpha}
+balpha <- c(0, alpha)
+```
+
+Then the function body is
+```{r map-too-function-to-return}
+        stopifnot(is.numeric(balpha))
+        stopifnot(is.finite(balpha))
+        stopifnot(length(balpha) == 1 + length(alpha))
+        b <- balpha[1]
+        alpha <- balpha[-1]
+        alpha[ifit] <- alpha[ifit] + b
+        xi <- predict(aout, newcoef = alpha,
+            model.type = "conditional", is.always.parameter = TRUE)
+        xi <- matrix(xi, ncol = nnode)
+        # always use drop = FALSE unless you are sure you don't want that
+        # here if we omit drop = FALSE and there is only one non-subsampling
+        # node, the code will break (apply will give an error)
+        xi <- xi[ , ! is.subsamp, drop = FALSE]
+        mu <- apply(xi, 1, prod)
+        # mu is unconditional mean values for model without subsampling
+        # in this application all components mu are the same because no
+        # covariates except varb, so just return only one
+        mu[1]
+```
+
+Everything seems to be all right, so we put it all together.
+```{r map.factory.other}
+map.factory.other <- function(rout) {
+<<map-setup>>
+<<map-subsampling>>
+<<map-fake>>
+<<map-extractors>>
+<<map-which-ind>>
+<<map-too-setup-ifit>>
+    # return map function
+    function (balpha) {
+<<map-too-function-to-return>>
+    }
+}
+```
+
+Try it out.
+```{r map.too.try}
+map.too <- map.factory.other(rout)
+map.too(balpha)
+```
+### FFTNS Estimates
+
+We use the function factory defined in the preceding section to make
+FFTNS estimates.
+```{r doit.fftns}
+doit.fftns <- function(rout) {
+    map.too <- map.factory.other(rout)
+    balpha.hat <- c(0, rout$alpha)
+    g <- grad(map.too, balpha.hat)
+    dmu.db <- g[1]
+    mu.hat <- map.too(balpha.hat)
+    nu.hat <- rout$nu["parental"]
+    as.numeric(dmu.db^2 * 4 * nu.hat / mu.hat)
+}
+```
+
+Not too hard.  If it isn't clear what these computations are, compare
+with Section 12.3.2 of @zenodo.
+
+Try it.
+```{r doit.fftns.one}
+doit.fftns(rout)
+```
+
+Do all.
+```{r doit.fftns.all}
+lapply(rout.parents, function(x) lapply(x, doit.fftns))
+```
+Seems to agree with Table 1 of @zenodo.
+
+### FFTNS Estimates with Standard Errors
+
+Again following @zenodo, Section 12.3.2, we modify R function `doit.fftns`
+to also compute standard errors.
+```{r doit.fftns.se}
+doit.fftns <- function(rout) {
+    map.too <- map.factory.other(rout)
+    balpha.hat <- c(0, rout$alpha)
+    g <- grad(map.too, balpha.hat)
+    h <- hessian(map.too, balpha.hat)
+    dmu.db <- g[1]
+    dmu.dalpha <- g[-1]
+    d2mu.db.dalpha <- h[1, -1]
+    mu.hat <- map.too(balpha.hat)
+    nu.hat <- rout$nu["parental"]
+    dfftns <- c(- 4 * nu.hat * dmu.dalpha * dmu.db^2 / mu.hat^2 +
+        8 * nu.hat * dmu.db * d2mu.db.dalpha / mu.hat,
+        4 * dmu.db^2 / mu.hat, 0)
+    fishinv <- vcov(rout, standard.deviation = FALSE)
+    fftns.se <- t(dfftns) %*% fishinv %*% dfftns
+    fftns.se <- sqrt(as.vector(fftns.se))
+    point.estimate <- dmu.db^2 * 4 * nu.hat / mu.hat
+    c(estimate = point.estimate, std.err. = fftns.se)
+}
+```
+
+Try it.
+```{r doit.fftns.with.se.one}
+doit.fftns(rout)
+```
+
+Do all.
+```{r doit.fftns.with.se.all, cache=TRUE, dependson="reaster.parents"}
+fftns.results <- lapply(rout.parents, function(x) lapply(x, doit.fftns))
+fftns.results
+```
+Seems to agree with Table 1 of @zenodo except for the ones that were `NA`
+there (which were incorrect).
+
+### Wait, What?
+
+But there still seems to be an issue with
+KW in 2015, which is ridiculously large.
+
+Check that (debug).
+```{r debug}
+rout <- rout.parents$KW[["2015"]]
+foo <- vcov(rout, standard.deviation = FALSE)
+foo
+max(foo)
+```
+
+Nothing there.  Continue.
+```{r debug.too, error=TRUE}
+map.too <- map.factory.other(rout)
+balpha.hat <- c(0, rout$alpha)
+g <- grad(map.too, balpha.hat)
+h <- hessian(map.too, balpha.hat)
+dmu.db <- g[1] |> print()
+dmu.dalpha <- g[-1] |> print()
+d2mu.db.dalpha <- h[1, -1] |> print()
+mu.hat <- map.too(balpha.hat) |> print()
+nu.hat <- rout$nu["parental"] |> print()
+```
+
+It seems the results of R function `hessian` from R package `numDeriv`
+are ridiculous.  We have observed similar problems before (not published).
+
+### A Likelihood Interval
+
+Hence we produce a likelihood interval, or more precisely
+an objective-function-based interval, where the objective function in
+question is the approximation to the log likelihood used
+by R function `reaster`.
+
+This uses R function `objfun.factory` which is new in R package `aster`
+in version 1.3-4 which this document requires.
+```{r objfun}
+objfun <- with(rout, objfun.factory(fixed, random, response,
+    obj$pred, obj$fam, as.vector(obj$root), zwz))
+theta.hat <- with(rout, c(alpha, b, nu))
+objfun(theta.hat)$value
+```
+
+This approximates minus log likelihood, so the likelihood ratio test statistic
+is approximated by
+```{r objfun.lrt}
+lrt.factory <- function(objfun, theta.hat) {
+    lrt.min <- objfun(theta.hat)$value
+    function(theta) 2 * (objfun(theta)$value - lrt.min)
+}
+lrt <- lrt.factory(objfun, theta.hat)
+```
+
+We form a `r round((1 - 2 * pnorm(-1)) * 100, 2)`% confidence interval
+by maximizing and minimizing a parameter of interest, in this case the FFTNS
+prediction calculated by `map.too` over the region of the parameter space
+where R function `lrt` has the value less than or equal to one.  We choose
+this confidence interval to be equivalent to a Wald interval one standard
+error to either side of the point estimate.  Of course, a likelihood interval
+will not be symmetric about the point estimate.
+(We will deal with that later.)
+
+Now we make the objective function.  This is just the parameter
+estimate evaluated by R function `map.too` except we change the value to
+`Inf` ($+ \infty$) when we are minimizing and `-Inf` ($- \infty$) when
+maximizing when we are off the constraint set, that is when R function `lrt`
+evaluates to greater than 1.
+```{r objfun-fftns}
+objfun.fftns.factory <- function(rout, direction = c("minimize", "maximize")) {
+    direction <- match.arg(direction)
+    stopifnot(inherits(rout, "reaster"))
+    map.too <- map.factory.other(rout)
+    objfun <- with(rout, objfun.factory(fixed, random, response,
+        obj$pred, obj$fam, as.vector(obj$root), zwz))
+    theta.hat <- with(rout, c(alpha, b, nu))
+    lrt.min <- objfun(theta.hat)$value
+    lrt <- function(theta) 2 * (objfun(theta)$value - lrt.min)
+    is.alpha <- seq_along(theta.hat) <= length(rout$alpha)
+    is.nu <- c(rep(FALSE, length(rout$alpha) + length(rout$b)),
+        names(rout$nu) == "parental")
+    stopifnot(sum(is.nu) == 1)
+    function(theta) {
+        stopifnot(is.numeric(theta))
+        stopifnot(is.finite(theta))
+	stopifnot(length(theta) == length(theta.hat))
+        if (lrt(theta) > 1) return(if (direction == "minimize") Inf else -Inf)
+	alpha <- theta[is.alpha]
+	balpha <- c(0, alpha)
+	nu <- theta[is.nu]
+        g <- grad(map.too, balpha)
+        dmu.db <- g[1]
+        mu.hat <- map.too(balpha)
+        as.numeric(dmu.db^2 * 4 * nu / mu.hat)
+    }
+}
+```
+
+OK.  Minimize.
+```{r fftns.lower,cache=TRUE}
+oout.dn <- optim(theta.hat, objfun.fftns.factory(rout), method = "SANN",
+    control = list(trace = TRUE, parscale = rep(1e-6, length(theta.hat))))
+```
+OK.  Maximize.
+```{r fftns.upper,cache=TRUE}
+oout.up <- optim(theta.hat, objfun.fftns.factory(rout), method = "SANN",
+    control = list(trace = TRUE, parscale = rep(1e-6, length(theta.hat)),
+        fnscale = -1))
+```
+
+Get our interval.
+```{r fftns.interval}
+c(oout.dn$value, oout.up$value)
+```
+
+If we redo, do we get a wider interval?
+```{r fftns.redo, cache=TRUE}
+oout.dn <- optim(oout.dn$par, objfun.fftns.factory(rout), method = "SANN",
+    control = list(trace = TRUE, parscale = rep(1e-6, length(theta.hat))))
+oout.up <- optim(oout.up$par, objfun.fftns.factory(rout), method = "SANN",
+    control = list(trace = TRUE, parscale = rep(1e-6, length(theta.hat)),
+        fnscale = -1))
+c(oout.dn$value, oout.up$value)
+```
+
+Hardly changed.  So that's it.
+
+Now that we have a method for making (approximate)
+likelihood-based confidence intervals, perhaps we should use that instead
+of standard errors and asymptotic normality.  But we won't change horses
+in the middle of the stream.  So we are done.  Fix up (by hand) the
+standard error that is ridiculous.
+```{r fftns.fixup}
+fftns.results$KW[["2015"]]
+fftns.results$KW[["2015"]]["std.err."] <-
+    diff(c(oout.dn$value, oout.up$value)) / 2
+fftns.results$KW[["2015"]]
+```
+
+## New Table 3
+
+Now we combine Table \@ref(tab:decomp) above, whose numbers are in R object
+`fout`, with the numbers for FFTNS predictions that were computed in the
+preceding section and originally were (mostly) in @zenodo.
+```{r show.fout}
+head(fout)
+head(fftns.results)
+```
+
+First merge these two lists of lists.
+```{r tab3.merge}
+qux <- character(0)
+quux <- character(0)
+quuux <- double(0)
+quuuux <- double(0)
+for (site in names(fout)) {
+    for (year in names(fout[[1]])) {
+	prev.year <- as.character(as.numeric(year) - 1)
+        lab <- paste0(site.translate[site], " ", prev.year, "-", year)
+        foo <- fout[[site]][[year]]
+        bar <- fftns.results[[site]][[year]]
+	baz <- c(foo$estimates[-4], bar[1], foo$estimates[4])
+	baze <- c(foo$std.err.[-4], bar[2], foo$std.err.[4])
+	qux <- c(qux, rep(lab, 5))
+	quux <- c(quux,
+            c("total", "environmental", "selection", "fftns", "residual"))
+	quuux <- c(quuux, baz)
+	quuuux <- c(quuuux, baze)
+    }
+}
+foo <- data.frame(Subset = qux, change = quux, estimate = quuux,
+    std.err = quuuux)
+```
+
+Ready to make table.
+```{r ft.align="center", tab.cap="Estimates of Change in Mean Fitness", label = "tab3"}
+foot <- as.data.table(foo) |>
+    as_grouped_data(groups = c("Subset"),
+        columns = c("change", "estimate", "std.err")) |>
+    flextable() |>
+    set_header_labels(change = "Change", estimate = "Estimate",
+        std.err = "Std. Error") |>
+    colformat_double(digits = 4)
+foot
+```
+
+OK.  Ship out to Microsoft Word.
+```{r table.three.to.word}
+foot <- set_caption(foot, "Estimates of Change in Mean Fitness")
+save_as_docx(foot, path = "table3.docx")
+```
+
+# Plotting the Decomposition, Try Two
+
+We make more plots and output them as separate PDF files for the paper.
+This time no arrows.
+
+## Six Different Plots
+
+```{r plots.six}
+crit <- qnorm(0.975)
+crit
+pdf("plots-six.pdf")
+par(mar = c(3, 4, 4, 0) + 0.1)
+par(mfrow = c(3, 2))
+for (site in names(fout)) {
+    for (year in names(fout[[1]])) {
+	prev.year <- as.character(as.numeric(year) - 1)
+        lab <- paste0(site.translate[site], " ", prev.year, "-", year)
+        foo <- fout[[site]][[year]]
+        errbar(1:4,
+            foo$estimate,
+            foo$estimate + crit * foo$std.err.,
+            foo$estimate - crit * foo$std.err.,
+	    main = lab, axes = FALSE,
+	    ylab = "change in mean fitness", xlab = "",
+	    xlim = c(0.5, 4.5))
+	box()
+	axis(side = 2)
+	axis(side = 1, at = 1:4, tick = FALSE, labels = names(foo$estimate))
+    abline(h = 0)
+    }
+}
 ```
 
 # References
