@@ -1,7 +1,9 @@
 CSV_FILES = csdat.csv GCdat.csv KWdat.csv CS_2015_planting_data.csv \
-            KW_2015_planting_data.csv
-
+    GC_2015_planting_data.csv KW_2015_planting_data.csv \
+    KW.planting.data.final.csv
 BIB_FILES = foo.bib journal-of-the-royal-statistical-society.csl
+
+all : fixup-data.pdf realized.pdf
 
 realized.pdf : mf.rda realized.Rmd ${BIB_FILES}
 	Rscript -e 'rmarkdown::render("realized.Rmd")'
