@@ -67,15 +67,88 @@ parents & parents & parents \\
 \end{tabular}
 \end{center}
 Here ``parents'' means individuals produced by the experimental crosses
-(seeds from
-the same crosses were planted in each year).  For short, we will say these
-individuals are from the same ``family'' if they are known sibs
-(that is, have the same sire in the experimental crosses).
+(seeds from the same crosses were planted in each year).
+For these ``parents'' we have full pedigree information: we know their sires
+and dams.
 Here ``offspring'' means individuals whose dam was a ``parent'' from the
-previous year (their own sire unknown because of open pollination).
-For short, we will say these
-individuals are from the same ``family'' as their dam in the previous year,
-which is their maternal grandsire.
+previous year.  Their sire is unknown because of the open pollination design
+of the experiment.  Thus we do not have full pedigree information for these
+``offspring'' individuals: we know only their dams (and hence also maternal
+grandsire and granddam).
+
+For simplicity, we divide these individuals into ``families'' in scare quotes.
+The ``family'' of a ``parent'' is the family of that individual's sire
+(which is known).
+The ``family'' of an ``offspring'' is the family of that individual's
+maternal grandsire (which is known).
+
+One might think that we want to mimic quantitative genetics in our random
+effects aster models that we fit to these data.  But both the paper introducing
+these models \citep*[Discussion]{reaster} and the on-line help for R function
+\code{reaster}, which fits these models, warn against models with too many
+random effects (the Breslow-Clayton approximation, \citealp{breslow-clayton},
+which R function \code{reaster} uses, will be bad).
+
+In particular \citet{reaster} warn against having as many random effects
+as individuals (or even more), which is what classical quantitative genetics
+does: each individual has an additive genetic effect (also called breeding
+value), which is a random effect.
+Thus \citet{reaster} and \citet{kulbaba} and \citet{zenodo}
+and \citet{realized} include only parental random effects in their EFMM, no
+individual random effects.  This does not agree with classical quantitative
+genetics but is the state of the art.
+
+\citet*{realized} fit each year-site-generation combination with a separate
+random effects
+aster model to fully account for environmental and genetic-environmental
+effects.  In such fits for what are called ``parents'' above we put in both
+sire and dam effects (both with the same variance parameter, so there are
+no maternal effects in the model.
+And in such fits for what are called ``offspring'' above, we put in only
+``family'' in scare quotes effects (that is, maternal grandsire).
+
+\subsection{Estimates of Family Mean Fitness} \label{sec:moo}
+
+Aster models with random effects \citep{reaster}, following the enormous
+literature and many software implementations of generalized linear mixed models
+(GLMM) assume the random effects are just fixed effects that are re-imagined
+as normal random variables.  Thus these random effects are on the
+\emph{canonical parameter scale} of the exponential family that is the aster
+model \citep{aster,reaster}.  Thus we can call these exponential family
+mixed models (EFMM).
+
+It is very unclear what one should do with random effects in GLMM or EFMM.
+They are not, in principle, unknown parameters to estimate.
+Thus it is not clear that point estimates make sense for them.
+Nevertheless, classical random effects models (linear mixed models, LMM)
+do have BLUP (best linear unbiased predictors) for their random effects.
+But GLMM and EFMM have no analogues of BLUP.
+R function \code{reaster} in R package \code{aster} \citep{aster-package}
+does provide point estimates of the random effects on the canonical parameter
+scale (which can be described as approximate conditional modes,
+Section~\ref{sec:b-hat} below).
+
+But these are of no use in applications because if we want mean fitness,
+we need estimates on the scale on which fitness is measured.  This is the
+response scale or the exponential family \emph{mean value parameter scale}
+(both are the same).
+\citet{stanton-thiede} devote a paper to discussing the scientific futility
+of working on the wrong scale.
+
+We consider this an obvious mathematical issue.
+The transformation from exponential family canonical parameters to
+exponential family mean value parameters is well defined although
+very complicated \citep[Sections~1.18 through~1.22]{aster-theory}.
+The computer can do it (R function \code{predict.aster}, that is,
+the method of R generic function \code{predict} that handles R objects
+of class \code{aster}) although the algorithm is so complicated that
+following the computational details gives little or no understanding.
+But we do know this transformation is highly nonlinear.
+And we know from basic probability theory that means do not pass through
+nonlinear functions.  If $g$ is a linear function (either scalar-to-scalar
+or vector-to-vector) and $X$ is a random scalar or vector
+(whichever is needed), then $E(g(X)) = g(E(X))$.
+But if $g$ is not a linear function, then this equality is false.
 
 \subsection{Change in Mean Fitness} \label{sec:change}
 
@@ -183,7 +256,7 @@ separately.  We also need to derive standard errors for each.
 
 \subsection{Aster Models with Random Effects}
 
-In aster models with random effects \citep*{reaster} we have fixed effects
+In aster models with random effects \citep{reaster} we have fixed effects
 and random effects.  Fixed effects are unknown parameters to estimate.
 Random effects are not.  They are (theoretical, hypothetical, unobservable,
 latent, hidden, and perhaps other names) random variables whose variances are
@@ -200,6 +273,7 @@ function \code{vcov} that handles objects of class \code{reaster} (which
 are objects returned by R function \code{reaster}).
 
 \subsection{Estimates of Random Effects}
+\label{sec:b-hat}
 
 R function \code{reaster} also provides ``estimates'' (in scare quotes)
 of random effects.  Of course, random effects are not constants to estimate,
@@ -626,9 +700,9 @@ Breslow, N.~E., and Clayton, D.~G. (1993).
     \textbf{88}, 9--25.
 \newblock \doi{10.1080/01621459.1993.10594284}.
 
-\bibitem[Geyer(2024)]{aster-package}
-Geyer, C.~J. (2024).
-\newblock R package \texttt{aster}: Aster Models, version 1.2-1.
+\bibitem[Geyer(2025)]{aster-package}
+Geyer, C.~J. (2025).
+\newblock R package \texttt{aster}: Aster Models, version 1.3-5.
 \newblock \url{https://cran.r-project.org/package=aster}.
 
 \bibitem[Geyer(unpublished)]{aster-theory}
@@ -648,6 +722,17 @@ Geyer, C.~J., Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M.,
 \newblock Supplementary material, version 2.0.1.
 \newblock \doi{10.5281/zenodo.7013098}.
 
+\bibitem[Geyer, et al.(2025)Geyer, Kulbaba, Sheth, Pain, Eckhart,
+    and Shaw]{realized}
+Geyer, C.~J., Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M.,
+    and Shaw, R.~G. (2025).
+\newblock Estimates of realized response to selection in \emph{Chamaecrista
+    fasciculata} and decomposition into environmental and genetic parts.
+\newblock Supplementary material (data analysis) for a draft paper
+    \code{analysis/realized.pdf} in this git repository:
+\newblock \url{https://github.com/cjgeyer/MeanFitness}.
+\newblock Permanent repository: \doi{10.5281/zenodo.17093287}.
+
 \bibitem[Geyer, et al.(2012)Geyer, Ridley, Latta, Etterson, and Shaw]{tr692}
 Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R and Shaw, R.~G.
     (2012).
@@ -664,6 +749,12 @@ Geyer, C.~J., Ridley, C.~E., Latta, R.~G., Etterson, J.~R., and Shaw, R.~G.
 \newblock \emph{Annals of Applied Statistics}, \textbf{7}, 1778--1795.
 \newblock \doi{10.1214/13-AOAS653}.
 
+\bibitem[Geyer, et~al.(2007)Geyer, Wagenius, and Shaw]{aster}
+Geyer, C.~J., Wagenius, S., and Shaw, R.~G. (2007).
+\newblock Aster models for life history analysis.
+\newblock \emph{Biometrika}, \textbf{94}, 415--426.
+\newblock \doi{10.1093/biomet/asm030}.
+
 \bibitem[Kulbaba, et al.(2019)Kulbaba, Sheth, Pain, Eckhart, and Shaw]{kulbaba}
 Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M., and
     Shaw, R.~G. (2019).
@@ -677,16 +768,27 @@ Kulbaba, M.~W., Sheth, S.~N., Pain, R.~E., Eckhart, V.~M., and
 Lande, R. and Arnold, S.~J. (1983).
 \newblock The measurement of selection on correlated characters.
 \newblock \emph{Evolution}, \textbf{37}, 1210--1226.
+\newblock \doi{10.2307/2408842}.
 
 \bibitem[Price(1970)]{pr70}
 Price, G.~R. (1970).
 \newblock Selection and covariance.
 \newblock \emph{Nature}, \textbf{227}, 520--521.
+\newblock \doi{10.1038/227520a0}.
 
 \bibitem[Price(1972)]{pr72}
 Price, G.~R. (1972).
 \newblock Extension of covariance selection mathematics.
 \newblock \emph{Annals of Human Genetics}, \textbf{35}, 485--490.
+\newblock \doi{10.1111/j.1469-1809.1957.tb01874.x}.
+
+\bibitem[Stanton and Thiede(2005)]{stanton-thiede}
+Stanton, M.~L., and D.~A. Thiede. 2005.
+\newblock Statistical convenience vs. biological insight: consequences of
+    data transformation for the analysis of fitness variation in
+    heterogeneous environments.
+\newblock \emph{New Phytologist}, \textbf{166}, 319--337.
+\newblock \doi{10.1111/j.1469-8137.2004.01311.x}.
 
 \bibitem[van der Vaart(1998)]{vdv}
 van der Vaart, A.~W. (1998).

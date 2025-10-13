@@ -1836,5 +1836,42 @@ for (site in names(fout)) {
 }
 ```
 
+# Making a Dataset for R Package Aster
+
+Just the parental Grey Cloud Dunes 2015 data.
+```{r dataset}
+my_site <- "GC"
+my_year <- "2015"
+exists(site)
+rm(year)
+subdat <- subset(data.primary[[my_site]],
+    year == my_year & cohort == "greenhouse")
+subdat <- droplevels(subdat)
+redata <- reshape(subdat, varying = list(vars), direction = "long",
+    timevar = "varb", times = as.factor(vars), v.names = "resp")
+redata <- transform(redata,
+    fit = as.numeric(grepl("totalseeds", as.character(varb))),
+    root = 1)
+save(redata, file = "grey_cloud_2015.rda")
+```
+
+Check model fitting is OK.
+```{r dataset.model.fit, cache=TRUE}
+modmat.sire <- model.matrix(~ 0 + fit:paternalID, redata)
+modmat.dam <- model.matrix(~ 0 + fit:maternalID, redata)
+modmat.siredam <- cbind(modmat.sire, modmat.dam)
+rout <- reaster(resp ~ fit + varb,
+    list(parental = ~ 0 + modmat.siredam, block = ~ 0 + fit:block),
+    pred, fam, varb, id, root, data = redata)
+```
+
+Check that the results are the same as before.
+```{r dataset.check.results}
+rout.other <- rout.parents[[my_site]][[my_year]]
+all.equal(rout$alpha, rout.other$alpha)
+all.equal(rout$nu, rout.other$nu)
+all.equal(rout$b, rout.other$b)
+```
+
 # References
 
