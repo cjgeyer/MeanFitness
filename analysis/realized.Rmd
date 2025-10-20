@@ -114,7 +114,8 @@ library("data.table")
 library("mcmc")
 ```
 
-Need at least version 1.3-4 of R package `aster` for R generic function `vcov`
+Need at least version 1.3-4 of R package `aster` [@aster-package]
+for R generic function `vcov`
 to work on results of calls to R functions `aster` and `reaster`.
 ```{r aster-version}
 stopifnot(compareVersion(as.character(packageVersion("aster")), "1.3-4") >= 0)
@@ -599,6 +600,12 @@ do it.  The delta method is valid for any differentiable function.
 You replace R function `map` in both places it occurs (in computing R vector
 `estimates` and in computing R matrix `jack`) with your R function that
 calculates some other estimator.
+
+In this we are following the advice of the new package vignette about the
+delta method in R package `aster` [@aster-package], although that is
+anachronistic.  That vignette copies one of the analyses in this document
+for its random-effects example.  We are not copying it.  This method was
+worked out here and in @zenodo.
 
 ## Apply To Offspring
 
@@ -1836,6 +1843,108 @@ for (site in names(fout)) {
 }
 ```
 
+# Yet More Tables
+
+## Introduction
+
+We want a table that shows for each site-year subexperiment the number of
+G1 individuals planted (also called parents),
+and the number of sires and dams of those individuals.
+
+We want a similar table for G2 individuals (also called offspring)
+but for them we do not know sires (because of open pollination) and
+have not recorded dams but rather only maternal grandsires (also called
+family), so we report that.
+
+## First Table
+
+```{r count.parents}
+count.parents <- lapply(data.primary, function(x) lapply(years, function(y) {
+    subdat <- subset(x, year == y & cohort == "greenhouse")
+    subdat <- droplevels(subdat)
+    nind <- nrow(subdat)
+    nsire <- nlevels(subdat$paternalID)
+    ndam <- nlevels(subdat$maternalID)
+    c(planted = nind, sires = nsire, dams = ndam)
+    }))
+count.parents
+```
+
+So turn that data structure into a table.
+```{r table.parents}
+table.parents <- count.parents |> unlist() |> matrix(nrow = 3) |> t()
+colnames(table.parents) <- names(count.parents[[1]][[1]])
+table.parents <- as.data.frame(table.parents)
+table.parents <- transform(table.parents,
+    site = rep(names(data.primary), each = 3),
+    year = rep(years, times = 3))
+table.parents <- transform(table.parents, site = site.translate[site])
+table.parents
+```
+
+Great! Now ready to make the Word table.
+```{r ft.align="center", tab.cap="Numbers in Parental Subexperiments", label = "tab4"}
+foot <- table.parents |>
+    as.data.table() |>
+    as_grouped_data(groups = c("site"),
+        columns = c("year", "planted", "sires", "dams")) |>
+    flextable() |>
+    set_header_labels(year = "Year", planted = "Planted", sires = "Sires",
+        dams = "Dams") |>
+    colformat_int(big.mark = "", j = 2)
+foot
+```
+OK.  Ship out to Microsoft Word.
+```{r table.four.to.word}
+foot <- set_caption(foot, "Numbers in Parental Subexperiments")
+save_as_docx(foot, path = "table4.docx")
+```
+
+## Second Table
+
+```{r count.offspring}
+count.offspring <- lapply(data.primary,
+    function(x) lapply(years.offspring, function(y) {
+    subdat <- subset(x, year == y & cohort == "field")
+    subdat <- droplevels(subdat)
+    nind <- nrow(subdat)
+    nfam <- nlevels(subdat$grandpaternalID)
+    c(planted = nind, families = nfam)
+    }))
+count.offspring
+```
+
+So turn that data structure into a table.
+```{r table.offspring}
+table.offspring <- count.offspring |> unlist() |> matrix(nrow = 2) |> t()
+colnames(table.offspring) <- names(count.offspring[[1]][[1]])
+table.offspring <- as.data.frame(table.offspring)
+table.offspring <- transform(table.offspring,
+    site = rep(names(data.primary), each = 2),
+    year = rep(years.offspring, times = 3))
+table.offspring <- transform(table.offspring, site = site.translate[site])
+table.offspring
+```
+
+Great! Now ready to make the Word table.
+```{r ft.align="center", tab.cap="Numbers in Offspring Subexperiments", label = "tab5"}
+foot <- table.offspring |>
+    as.data.table() |>
+    as_grouped_data(groups = c("site"),
+        columns = c("year", "planted", "families")) |>
+   flextable() |>
+   set_header_labels(year = "Year", planted = "Planted",
+       families = "Families") |>
+   colformat_int(big.mark = "", j = 2)
+foot
+```
+OK.  Ship out to Microsoft Word.
+```{r table.five.to.word}
+foot <- set_caption(foot, "Numbers in Offspring Subexperiments")
+save_as_docx(foot, path = "table5.docx")
+```
+
+
 # Making a Dataset for R Package Aster
 
 Just the parental Grey Cloud Dunes 2015 data.
@@ -1852,7 +1961,7 @@ redata <- reshape(subdat, varying = list(vars), direction = "long",
 redata <- transform(redata,
     fit = as.numeric(grepl("totalseeds", as.character(varb))),
     root = 1)
-save(redata, file = "grey_cloud_2015.rda")
+save(redata, pred, fam, file = "grey_cloud_2015.rda")
 ```
 
 Check model fitting is OK.
