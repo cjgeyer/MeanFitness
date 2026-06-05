@@ -16,7 +16,7 @@ by the following authors
 The bibliographic citation is
 
  * *Evolution Letters*, **10**, 315–325.
- * DOI:[https://doi.org/10.1093/evlett/qrag013](10.1093/evlett/qrag013)
+ * DOI:[10.1093/evlett/qrag013](https://doi.org/10.1093/evlett/qrag013).
 
 Most of the contents of this repo are a mess of blind alleys and failed
 attempts.  The two output files that are current and the supplementary
