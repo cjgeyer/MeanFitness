@@ -4,7 +4,7 @@ This repo contains supplementary material for a paper currently titled
 
  * Realization of ongoing evolutionary adaptation in the field
 
-by the following authors in some order, not necessarily this order,
+by the following authors
 
  * Ruth G. Shaw, University of Minnesota, shawx016@umn.edu
  * Charles J. Geyer, University of Minnesota, geyer@umn.edu
