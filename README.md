@@ -6,12 +6,17 @@ This repo contains supplementary material for a paper currently titled
 
 by the following authors in some order, not necessarily this order,
 
+ * Ruth G. Shaw, University of Minnesota, shawx016@umn.edu
  * Charles J. Geyer, University of Minnesota, geyer@umn.edu
  * Mason W. Kulbaba, St. Mary's University, mason.kulbaba@stmu.ca
  * Seema N. Sheth, North Carolina State University, ssheth3@ncsu.edu
- * Rachel E. Pain, University of Minnesota, repain@umn.edu
  * Vincent M. Eckhart, Grinnell College, eckhart@grinnell.edu
- * Ruth G. Shaw, University of Minnesota, shawx016@umn.edu
+ * Rachel E. Pain, University of Minnesota, repain@umn.edu
+
+The bibliographic citation is
+
+ * *Evolution Letters*, **10**, 315–325.
+ * DOI:[https://doi.org/10.1093/evlett/qrag013](10.1093/evlett/qrag013)
 
 Most of the contents of this repo are a mess of blind alleys and failed
 attempts.  The two output files that are current and the supplementary

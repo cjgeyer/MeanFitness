@@ -1348,7 +1348,7 @@ foot <- data.frame(foo) |>
     flextable() |>
     set_header_labels(year = "Year", e1 = "Estimate", s1 = "Std. Error",
         e2 = "Estimate", s2 = "Std. Error") |>
-    colformat_double(digits = 4) |>
+    colformat_double(digits = 3) |>
     add_header_row(colwidths = c(1, 1, 2, 2),
         values = c("", "", "before selection", "after selection"))
 foot
@@ -1378,7 +1378,7 @@ foot <- doit.helper(fitness.offspring) |>
     flextable() |>
     set_header_labels(year = "Year", estimates = "Estimate",
         std.err. = "Std. Error") |>
-    colformat_double(digits = 4)
+    colformat_double(digits = 3)
 foot
 ```
 OK.  Ship out to Microsoft Word.
@@ -1800,7 +1800,7 @@ foot <- as.data.table(foo) |>
     flextable() |>
     set_header_labels(change = "Change", estimate = "Estimate",
         std.err = "Std. Error") |>
-    colformat_double(digits = 4)
+    colformat_double(digits = 3)
 foot
 ```
 
